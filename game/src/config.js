@@ -56,6 +56,30 @@ const CONFIG = {
   CAM_SWEEP_DEG: 50, // camera sweeps +/- this from its base angle
   CAM_SWEEP_SPEED: 0.5, // rad/s of the sweep sine
   ALARM_CALM_S: 3.0, // seconds unseen by every camera before the alarm clears
+
+  // M13 smoke gadget (game-ai: smoke is vision-blocking, not a
+  // sound — it hides the player from cones without investigating).
+  SMOKE_COUNT: 2, // smokes per run, no refill
+  SMOKE_FLIGHT_S: 0.35, // same throw arc as the coin
+  SMOKE_CLOUD_R: 90, // px — the cone-blocking cloud radius
+  SMOKE_CLOUD_S: 4.0, // seconds a cloud lasts
+  // M13 laser tripwire (level-design: a timed gate, never a wall —
+  // the player crosses freely while OFF and pays while ON).
+  LASER_ON_S: 1.6, // seconds the beam is live
+  LASER_OFF_S: 1.6, // seconds the beam is down (the crossing window)
+  LASER_TRIP_SUSPICION: 0.6, // suspicion added to the laser meter per trip
+  // M13 alarm stages (game-ui-ux: a display mapping over the worst
+  // suspicion — the fill rates themselves never change).
+  STAGE_UNEASY: 0.35, // worst >= this -> UNEASY
+  STAGE_HUNTED: 0.6, // worst >= this -> HUNTED
+  STAGE_ALARM: 0.95, // worst >= this (or alarm active) -> ALARM
+  // M13 score (game-ui-ux: informative only — win/lose rules never
+  // change; a caught player simply never earns the GHOST bonus).
+  PROP_SCORE: 300, // points per prop taken
+  GHOST_BONUS: 500, // points for finishing with 0 detections
+  TIME_BONUS_MAX: 200, // full time bonus at <= TIME_BONUS_FULL_S
+  TIME_BONUS_FULL_S: 60, // seconds — full bonus up to a 1-minute run
+  TIME_BONUS_DECAY: 2, // points lost per second past the full window
 };
 
 export default CONFIG;

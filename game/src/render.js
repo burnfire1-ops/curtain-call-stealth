@@ -6,7 +6,7 @@
 // wood stage, walls, curtain covers, props, patrol routes, cones, guards,
 // player, rings, HUD, overlays.
 import CONFIG from './config.js';
-import { drawHud, drawPanel, formatTime, winRank, hudPanelRects } from './hud.js';
+import { drawHud, drawPanel, formatTime, winRank, hudPanelRects, scoreBreakdown } from './hud.js';
 import { shakeOffset } from './feel.js';
 
 const COLORS = {
@@ -60,6 +60,16 @@ const COLORS = {
   camMountEdge: '#5eead4',
   coin: '#ffd94d',
   coinRing: 'rgba(255, 217, 77, 0.80)',
+  // M13: smoke is soft grey (nothing like the gold coin or the red
+  // laser) — a radial puff that fades at the edge, so the cloud
+  // reads as a volume, not a wall. The laser beam is alarm red.
+  smoke: 'rgba(200, 200, 205, 0.32)',
+  smokeCore: 'rgba(220, 220, 225, 0.28)',
+  laser: 'rgba(255, 70, 60, 0.95)',
+  laserGlow: 'rgba(255, 70, 60, 0.25)',
+  laserOff: 'rgba(255, 70, 60, 0.28)',
+  laserEmitter: '#3a2020',
+  laserEmitterEdge: '#ff463c',
   hud: '#f5f0e6',
   hudDim: '#b8ab98',
   overlay: 'rgba(10, 8, 6, 0.78)',
@@ -259,6 +269,16 @@ function drawRings(ctx, world) {
     ctx.setLineDash([]);
     drawCircle(ctx, cx, cy, 5, COLORS.coin, '#1a140f');
   }
+  // M13: a flying smoke — the same arc as the coin, a grey puff
+  // instead of a gold dot (the simulation only ever sees the landing
+  // point, like the coin).
+  if (world.smokeFlight) {
+    const f = world.smokeFlight;
+    const p = Math.min(1, f.t / f.dur);
+    const cx = f.x0 + (f.x1 - f.x0) * p;
+    const cy = f.y0 + (f.y1 - f.y0) * p - Math.sin(p * Math.PI) * 28;
+    drawCircle(ctx, cx, cy, 6, 'rgba(200, 200, 205, 0.85)', '#1a140f');
+  }
   if (world.coinRing) {
     const r = world.coinRing;
     const grow = Math.min(1, r.age / 0.3);
@@ -272,6 +292,73 @@ function drawRings(ctx, world) {
     ctx.setLineDash([]);
   }
   ctx.globalAlpha = 1;
+  // M13: smoke clouds — a soft grey radial puff (core + fading
+  // edge) that thins as the 4s cloud ages. Drawn over the floor and
+  // cones, under the guards, so a hidden player still reads.
+  for (const cloud of world.smokeClouds || []) {
+    const fade = Math.max(0, 1 - cloud.age / CONFIG.SMOKE_CLOUD_S);
+    const grad = ctx.createRadialGradient(
+      cloud.x, cloud.y, 4, cloud.x, cloud.y, cloud.r);
+    grad.addColorStop(0, COLORS.smokeCore);
+    grad.addColorStop(0.7, COLORS.smoke);
+    grad.addColorStop(1, 'rgba(200, 200, 205, 0)');
+    ctx.globalAlpha = Math.min(1, 0.55 + fade * 0.45);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cloud.x, cloud.y, cloud.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// M13: a laser tripwire — a live beam is a bright red line with a
+// soft glow under it; a down beam is a dim dashed line. Both ends
+// carry an emitter box; the dot brightens in the last 0.4s of the
+// OFF phase, telegraphing that the beam is about to go live.
+function drawLaser(ctx, laser) {
+  const dx = laser.x2 - laser.x1;
+  const dy = laser.y2 - laser.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  if (laser.on) {
+    ctx.strokeStyle = COLORS.laserGlow;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(laser.x1, laser.y1);
+    ctx.lineTo(laser.x2, laser.y2);
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.laser;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(laser.x1, laser.y1);
+    ctx.lineTo(laser.x2, laser.y2);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = COLORS.laserOff;
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(laser.x1, laser.y1);
+    ctx.lineTo(laser.x2, laser.y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // Emitters: a dark box at each end + a lens dot. The dot is bright
+  // while ON, dim while OFF — and pulses bright in the last 0.4s of
+  // OFF, the "about to go live" telegraph.
+  const warn = !laser.on && laser.phaseT > CONFIG.LASER_OFF_S - 0.4;
+  const dotAlpha = laser.on ? 1 : (warn ? 0.75 : 0.35);
+  for (const [ex, ey] of [[laser.x1, laser.y1], [laser.x2, laser.y2]]) {
+    drawRect(ctx, { x: ex - 6, y: ey - 6, w: 12, h: 12 },
+      COLORS.laserEmitter, COLORS.laserEmitterEdge);
+    ctx.globalAlpha = dotAlpha;
+    ctx.fillStyle = '#ff463c';
+    ctx.beginPath();
+    ctx.arc(ex + nx * 8, ey + ny * 8, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawProps(ctx, world) {
@@ -474,6 +561,10 @@ export function render(ctx, world, screen, t = 0, muted = false) {
   // the wall instead of under it).
   for (const cam of world.cameras || []) drawCameraMount(ctx, cam);
 
+  // M13: laser tripwires (drawn after the mounts, so the beams sit
+  // on top of the floor and the emitters read as hardware).
+  for (const laser of world.lasers || []) drawLaser(ctx, laser);
+
   // Exit: green stage door + soft glow halo (M11) so the goal reads
   // from anywhere on the map.
   const ex = world.exit;
@@ -524,6 +615,18 @@ export function render(ctx, world, screen, t = 0, muted = false) {
     ctx.globalAlpha = 1;
   }
 
+  // M13: "TRIPPED!" flash — red, centre screen below the prop
+  // flash, fades in 1s. The laser trip is the one event that must
+  // read even when the player is looking at the minimap, not the beam.
+  if (world.feel.laserFlash > 0) {
+    ctx.globalAlpha = world.feel.laserFlash;
+    ctx.fillStyle = '#ff3b30';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRIPPED!', CONFIG.VIEW_WIDTH / 2, 190);
+    ctx.globalAlpha = 1;
+  }
+
   // M11: vignette — darkened playfield edges (top-10 lighting), drawn
   // after entities so the frame feels lit, before the HUD so text
   // stays at full contrast.
@@ -543,24 +646,30 @@ export function render(ctx, world, screen, t = 0, muted = false) {
       'the exit is always reachable without props.',
       'Light = danger · Dark = safe · Carpet = silent',
       'C throws a coin to distract guards · Cameras sweep teal cones — time them.',
+      'X throws smoke to block sight.',
+      'Lasers pulse — cross only when off.',
       '',
-      'WASD move · Shift run · C throw coin · P pause · M sound',
+      'WASD move · Shift run · C throw coin · X throw smoke · P pause · M sound',
       'Press ENTER or click to start',
     ]);
   } else if (screen === 'win') {
     const taken = world.props.filter((p) => p.taken).length;
     const rank = winRank(world.detections);
+    const s = scoreBreakdown(world);
     drawOverlay(ctx, `${rank} — ESCAPED!`, [
       `Time: ${formatTime(world.time)} · Props ${taken}/3 · Spotted ${world.detections}x`,
+      `Score: ${s.total} — Props ${s.props} + Ghost ${s.ghost} + Time ${s.time}`,
       rank === 'GHOST'
         ? 'Never seen at all — perfect.'
         : 'You were spotted, but you still escaped.',
       'Press R / Enter to play again',
     ]);
   } else if (screen === 'lose') {
+    const s = scoreBreakdown(world);
     drawOverlay(ctx, 'CAUGHT!', [
       `${world.caughtBy || 'An usher'} caught you.`,
       'An usher saw you inside the cone for too long.',
+      `Score: ${s.total} — Props ${s.props} + Time ${s.time}`,
       'Press R / Enter to try again',
     ]);
   }

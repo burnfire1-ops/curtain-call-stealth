@@ -24,6 +24,9 @@ export function applyShot(name) {
     // (gold ring at the landing point), CAM 1's teal cone is sweeping
     // onto the player, and USHER 2 is walking to investigate the
     // clink (Search, last-known = the coin). COINS ×2 in the HUD.
+    // M13: a smoke cloud hangs by curtain B (SMOKE ×1), LASER 1 is
+    // live across the vault corridor, LASER 2 is down (dashed), the
+    // minimap shows every dot, and the stage word reads HUNTED.
     const cam1 = world.cameras[0];
     cam1.angle = Math.atan2(230 - cam1.y, 500 - cam1.x);
     cam1.dir = { x: Math.cos(cam1.angle), y: Math.sin(cam1.angle) };
@@ -31,6 +34,13 @@ export function applyShot(name) {
     cam1.state = 'spotted';
     world.coinRing = { x: 600, y: 140, radius: 200, age: 0.1 };
     world.coins = 2;
+    world.smokes = 1;
+    world.smokeClouds = [{ x: 640, y: 320, r: 90, age: 0.5 }];
+    world.lasers[0].on = true;
+    world.lasers[0].phaseT = 0.5;
+    world.lasers[1].on = false;
+    world.lasers[1].phaseT = 1.0;
+    world.time = 45; // SCORE 700 live (Ghost 500 + Time 200, no props yet)
     stageGuard(world, 1, {
       x: 560, y: 210, dir: { x: 0.55, y: -0.83 },
       state: 'search', stateTime: 0.5, suspicion: 0.2,
@@ -57,6 +67,12 @@ export function applyShot(name) {
     cam1.suspicion = 1.0;
     cam1.state = 'spotted';
     world.alarm = { active: true, unseen: 0 };
+    // M13: LASER 1 is live across the vault corridor (the alarm shot
+    // shows the full sensor set — camera + laser + chasing guard).
+    world.lasers[0].on = true;
+    world.lasers[0].phaseT = 0.8;
+    world.lasers[1].on = false;
+    world.lasers[1].phaseT = 0.3;
     stageGuard(world, 0, {
       x: 420, y: 300, dir: { x: -1, y: 0 },
       state: 'chase', stateTime: 0.5, suspicion: 1.0,

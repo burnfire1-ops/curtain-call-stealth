@@ -5,11 +5,34 @@
 // ray alone does not hide the player. Pure functions, no DOM, no state.
 import CONFIG from './config.js';
 
+// Segment vs circle (M13): does the segment P1->P2 come within r
+// of (cx, cy)? Used for smoke blocking a sight line and for a laser
+// beam touching the player. Closest-point-on-segment test; a segment
+// that starts inside the circle counts as a hit.
+export function segmentHitsCircle(x1, y1, x2, y2, cx, cy, r) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  let t = 0;
+  if (lenSq > 1e-9) {
+    t = ((cx - x1) * dx + (cy - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+  }
+  const px = x1 + dx * t;
+  const py = y1 + dy * t;
+  const ddx = cx - px;
+  const ddy = cy - py;
+  return ddx * ddx + ddy * ddy < r * r;
+}
+
 // Shared cone check (M12): one sensor, used by guards (canSee) and
 // security cameras (camera.js) alike — the same cheap -> expensive
 // order (range, cone, 2-point raycast) for both. origin: { x, y },
 // dir: normalized facing, target: { x, y, r }.
-export function coneCheck(origin, dir, target, blockers, viewDist, halfAngleDeg) {
+// M13 smoke: `smoke` is an array of clouds { x, y, r } — a sight ray
+// that crosses a cloud is blocked, exactly like a wall. Smoke is
+// vision-blocking only: it never feeds the laser trip check.
+export function coneCheck(origin, dir, target, blockers, viewDist, halfAngleDeg, smoke = []) {
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
   const distSq = dx * dx + dy * dy;
@@ -30,20 +53,23 @@ export function coneCheck(origin, dir, target, blockers, viewDist, halfAngleDeg)
   for (const s of [1, -1]) {
     const tx = target.x + px * off * s;
     const ty = target.y + py * off * s;
-    if (!segmentBlocked(origin.x, origin.y, tx, ty, blockers)) {
-      return { seen: true, reason: 'seen' };
+    if (segmentBlocked(origin.x, origin.y, tx, ty, blockers)) continue;
+    if (smoke.some((c) => segmentHitsCircle(origin.x, origin.y, tx, ty, c.x, c.y, c.r))) {
+      continue;
     }
+    return { seen: true, reason: 'seen' };
   }
   return { seen: false, reason: 'blocked' };
 }
 
 // guard: { x, y, dir } — dir normalized. player: { x, y, r }.
 // blockers: rects that stop sight (walls + covers).
+// smoke: M13 clouds { x, y, r } that stop sight like a wall.
 // Returns { seen, reason } — reason is for debug/HUD, not gameplay.
-export function canSee(guard, player, blockers) {
+export function canSee(guard, player, blockers, smoke = []) {
   return coneCheck(
     guard, guard.dir, player, blockers,
-    CONFIG.VIEW_DIST, CONFIG.VIEW_HALF_ANGLE_DEG,
+    CONFIG.VIEW_DIST, CONFIG.VIEW_HALF_ANGLE_DEG, smoke,
   );
 }
 

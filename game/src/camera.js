@@ -38,9 +38,10 @@ export function stepCamera(cam, seen, ctx, dt) {
 
 // Same sensor as a guard: range + cone + 2-point raycast vs walls
 // and low cover (a curtain or the crate blocks a camera too).
-export function cameraSees(cam, player, blockers) {
+// M13 smoke: a cloud between camera and player blocks the cone.
+export function cameraSees(cam, player, blockers, smoke = []) {
   return coneCheck(
     cam, cam.dir, player, blockers,
-    CONFIG.CAM_VIEW_DIST, CONFIG.CAM_HALF_ANGLE_DEG,
+    CONFIG.CAM_VIEW_DIST, CONFIG.CAM_HALF_ANGLE_DEG, smoke,
   );
 }

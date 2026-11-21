@@ -3,7 +3,7 @@
 // Screen flow lives in screens.js (pure, unit-tested); HUD in hud.js;
 // audio in audio.js (lazy, never throws without an audio device).
 import CONFIG from './config.js';
-import { createWorld, step, throwCoin } from './world.js';
+import { createWorld, step, throwCoin, throwSmoke } from './world.js';
 import { createInput } from './input.js';
 import { render } from './render.js';
 import { applyShot } from './shots.js';
@@ -83,7 +83,9 @@ if (shot === 'start' || shot === 'play' || shot === 'end' || shot === 'chase'
       // ever moves, throw along the facing direction. throwCoin
       // itself enforces count / cooldown / flight, so a spent C is
       // a silent no-op.
-      if (input.wasPressed('KeyC')) {
+      // M13: X throws a smoke the same way (same aim, same shared
+      // 0.5s cooldown) — throwSmoke enforces its own count.
+      if (input.wasPressed('KeyC') || input.wasPressed('KeyX')) {
         const m = input.mouse();
         const target = m.moved
           ? { x: m.x, y: m.y }
@@ -91,7 +93,8 @@ if (shot === 'start' || shot === 'play' || shot === 'end' || shot === 'chase'
             x: world.player.x + world.player.dir.x * CONFIG.COIN_THROW_DIST,
             y: world.player.y + world.player.dir.y * CONFIG.COIN_THROW_DIST,
           };
-        throwCoin(world, target.x, target.y);
+        if (input.wasPressed('KeyC')) throwCoin(world, target.x, target.y);
+        else throwSmoke(world, target.x, target.y);
       }
 
       const prevStatus = world.status;
@@ -122,6 +125,8 @@ if (shot === 'start' || shot === 'play' || shot === 'end' || shot === 'chase'
         else if (name === 'prop') audio.propChime();
         else if (name === 'caught') audio.thud();
         else if (name === 'coin') audio.coinClink(); // M12: coin lands
+        else if (name === 'smoke') audio.smoke(); // M13: smoke lands
+        else if (name === 'laser') audio.laser(); // M13: laser tripped
       }
       // Win/lose stingers fire once, on the status transition.
       if (prevStatus === 'playing' && world.status === 'won') audio.win();

@@ -44,19 +44,37 @@ export function propsSummary(props) {
 // The alarming state is the signal; patrol is the default. The full
 // per-guard list still exists via guardStates() (tested, untouched).
 // Pure, unit-tested in tests/m8.test.js.
-export function guardStatesShort(states) {
+// M13: distances only for the `distLimit` nearest alerted guards
+// (the fallback when the full-distance line would overflow the
+// header panel — the roster order itself never changes).
+export function guardStatesShort(states, player, distLimit = Infinity) {
   const alerted = states.filter((g) => g.state !== 'patrol');
   const patrolling = states.length - alerted.length;
-  const parts = alerted.map(
-    (g) => `${g.name.replace('USHER ', 'U')} ${g.state.toUpperCase()}`,
-  );
+  let near = null;
+  if (player && distLimit < Infinity) {
+    near = new Set(alerted
+      .filter((g) => g.x !== undefined && g.y !== undefined)
+      .map((g) => ({ g, d: Math.hypot(g.x - player.x, g.y - player.y) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, distLimit)
+      .map((r) => r.g));
+  }
+  const parts = alerted.map((g) => {
+    const base = `${g.name.replace('USHER ', 'U')} ${g.state.toUpperCase()}`;
+    if (!player || g.x === undefined || g.y === undefined) return base;
+    if (near && !near.has(g)) return base;
+    const tiles = Math.round(
+      Math.hypot(g.x - player.x, g.y - player.y) / CONFIG.TILE);
+    return `${base} ${tiles}t`;
+  });
   if (patrolling > 0) parts.push(`${patrolling} PATROL`);
   return parts.join(' · ');
 }
 
 // One short line per usher: name + FSM state, in level order.
+// M13: positions ride along so the roster can show tile distances.
 export function guardStates(guards) {
-  return guards.map((g) => ({ name: g.name, state: g.state }));
+  return guards.map((g) => ({ name: g.name, state: g.state, x: g.x, y: g.y }));
 }
 
 // One short line per camera: name + sweep state, in level order.
@@ -69,6 +87,70 @@ export function cameraStates(cameras) {
 // CAM 2 SPOTTED". Pure, unit-tested in tests/m12.test.js.
 export function cameraStatesShort(states) {
   return states.map((c) => `${c.name} ${c.state.toUpperCase()}`).join(' · ');
+}
+
+// M13 alarm stages (game-ui-ux: a DISPLAY mapping over the worst
+// suspicion — the fill rates never change). The building alarm
+// overrides everything: an active alarm is ALARM at any meter value.
+// Pure, unit-tested in tests/m13.test.js.
+export function alarmStage(worst, alarmActive) {
+  if (alarmActive || worst >= CONFIG.STAGE_ALARM) return 'ALARM';
+  if (worst >= CONFIG.STAGE_HUNTED) return 'HUNTED';
+  if (worst >= CONFIG.STAGE_UNEASY) return 'UNEASY';
+  return 'CALM';
+}
+
+export const STAGE_COLORS = {
+  CALM: '#b8ab98',
+  UNEASY: '#e8a33d',
+  HUNTED: '#ff9a3d',
+  ALARM: '#ff3b30',
+};
+
+// M13 time bonus: full +200 at <= 60s, then -2/s, floored at 0.
+// Pure, unit-tested in tests/m13.test.js.
+export function timeBonus(seconds) {
+  if (seconds <= CONFIG.TIME_BONUS_FULL_S) return CONFIG.TIME_BONUS_MAX;
+  return Math.max(0, Math.floor(
+    CONFIG.TIME_BONUS_MAX
+    - CONFIG.TIME_BONUS_DECAY * (seconds - CONFIG.TIME_BONUS_FULL_S)));
+}
+
+// M13 score (informative only — win/lose rules never change):
+// props x300 + GHOST +500 (0 detections) + time bonus. The live
+// header number equals the win-screen total if you won right now
+// (a run with detections already lost the GHOST bonus). Pure.
+export function scoreBreakdown(world) {
+  const taken = world.props.filter((p) => p.taken).length;
+  const props = taken * CONFIG.PROP_SCORE;
+  const ghost = world.detections === 0 ? CONFIG.GHOST_BONUS : 0;
+  const time = timeBonus(world.time);
+  return { props, ghost, time, total: props + ghost + time, spotted: world.detections };
+}
+
+// M13: the objective checklist line — a taken prop shows ✓, the
+// rest ○ ("Props 2/3 ✓ Tiara ✓ Mask ○ Violin"). Extracted pure so
+// the checklist is unit-tested, not only screenshot-verified.
+export function propsChecklistLine(summary) {
+  return `Props ${summary.taken}/${summary.total} `
+    + summary.items.map((i) => `${i.taken ? '✓' : '○'} ${i.name}`).join(' ');
+}
+
+// M13 minimap (game-ui-ux: a tactical map, always on, bottom-right
+// — the corner the header and noise panels do not use). The panel
+// sits clear of the header (y8..92) and the noise panel (y104..126);
+// it covers floor only (the Violin prop sits under it, and the map
+// itself marks the prop as a gold diamond, so the objective stays
+// readable). Pure projection — unit-tested in tests/m13.test.js.
+export function minimapRect() {
+  return { x: 764, y: 476, w: 188, h: 116 };
+}
+
+export function projectToMinimap(x, y, rect = minimapRect()) {
+  return {
+    x: rect.x + (x / CONFIG.VIEW_WIDTH) * rect.w,
+    y: rect.y + (y / CONFIG.VIEW_HEIGHT) * rect.h,
+  };
 }
 
 // Win rank (tesis Q3): GHOST only when the player was never spotted —
@@ -141,6 +223,83 @@ export function drawSegmentedBar(ctx, x, y, segW, segH, gap, filled, total, fill
   }
 }
 
+// M13 minimap drawing: panel + room bounds + covers + exit + props
+// + guards + cameras + lasers + player, all projected from world
+// coordinates. Guards are amber dots (red while chasing), cameras
+// teal dots, lasers red lines (dim dashed while OFF), the player a
+// white dot with a dark ring. Pure drawing, reads the world only.
+export function drawMinimap(ctx, world) {
+  const rect = minimapRect();
+  drawPanel(ctx, rect.x, rect.y, rect.w, rect.h);
+  const p = (x, y) => projectToMinimap(x, y, rect);
+  // Room bounds (the outer walls, inset by the wall thickness).
+  const a = p(CONFIG.WALL, CONFIG.WALL);
+  const b = p(CONFIG.VIEW_WIDTH - CONFIG.WALL, CONFIG.VIEW_HEIGHT - CONFIG.WALL);
+  ctx.strokeStyle = 'rgba(245, 240, 230, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(a.x + 0.5, a.y + 0.5, b.x - a.x - 1, b.y - a.y - 1);
+  // Covers (curtains + crate), dim.
+  ctx.fillStyle = 'rgba(245, 240, 230, 0.18)';
+  for (const cover of world.level.covers) {
+    const c0 = p(cover.x, cover.y);
+    const c1 = p(cover.x + cover.w, cover.y + cover.h);
+    ctx.fillRect(c0.x, c0.y, Math.max(1, c1.x - c0.x), Math.max(1, c1.y - c0.y));
+  }
+  // Lasers: red line while ON, dim dashed while OFF.
+  for (const laser of world.lasers || []) {
+    const l0 = p(laser.x1, laser.y1);
+    const l1 = p(laser.x2, laser.y2);
+    ctx.strokeStyle = laser.on ? 'rgba(255, 70, 60, 0.95)' : 'rgba(255, 70, 60, 0.30)';
+    ctx.lineWidth = laser.on ? 2 : 1;
+    if (!laser.on) ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(l0.x, l0.y);
+    ctx.lineTo(l1.x, l1.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // Exit: green square. Props: gold diamonds (grey when taken).
+  const e0 = p(world.exit.x, world.exit.y);
+  const e1 = p(world.exit.x + world.exit.w, world.exit.y + world.exit.h);
+  ctx.fillStyle = '#2e7d32';
+  ctx.fillRect(e0.x, e0.y, Math.max(2, e1.x - e0.x), Math.max(2, e1.y - e0.y));
+  for (const prop of world.props) {
+    const pp = p(prop.x, prop.y);
+    ctx.fillStyle = prop.taken ? 'rgba(184, 171, 152, 0.6)' : '#ffd94d';
+    ctx.beginPath();
+    ctx.moveTo(pp.x, pp.y - 3);
+    ctx.lineTo(pp.x + 3, pp.y);
+    ctx.lineTo(pp.x, pp.y + 3);
+    ctx.lineTo(pp.x - 3, pp.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Cameras: teal dots. Guards: amber dots, red while chasing.
+  for (const cam of world.cameras || []) {
+    const cp = p(cam.x, cam.y);
+    ctx.fillStyle = '#2dd4bf';
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const guard of world.guards) {
+    const gp = p(guard.x, guard.y);
+    ctx.fillStyle = guard.state === 'chase' ? '#ff3b30' : '#e8a33d';
+    ctx.beginPath();
+    ctx.arc(gp.x, gp.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Player: white dot with a dark ring, always on top.
+  const pp = p(world.player.x, world.player.y);
+  ctx.fillStyle = '#f5f0e6';
+  ctx.beginPath();
+  ctx.arc(pp.x, pp.y, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1a140f';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
 // Rounded-rect path for the state pill (arcs, not ctx.roundRect, so
 // it works on every canvas the game runs on).
 function pillPath(ctx, x, y, w, h, r) {
@@ -183,9 +342,12 @@ const pillByState = {
 export function drawHud(ctx, world, screen, t, muted = false) {
   // M12: the meter shows the worst suspicion of guards AND cameras —
   // a camera filling up is as alarming as a guard filling up.
+  // M13: the laser meter feeds the same bar + stage word.
   const worst = worstSuspicion(
     world.guards.concat(world.cameras || []),
   ) || { state: 'patrol', suspicion: 0 };
+  const worstValue = Math.max(worst.suspicion, world.laserSuspicion || 0);
+  const score = scoreBreakdown(world);
   const summary = propsSummary(world.props);
   const panels = hudPanelRects();
 
@@ -200,16 +362,14 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   ctx.fillStyle = COLORS.hud;
   ctx.fillText('CURTAIN CALL', 16, 24);
   // Timer, top-right INSIDE the header panel (M10: it floated at
-  // VIEW_WIDTH-16, unbacked, above the EXIT box).
+  // VIEW_WIDTH-16, unbacked, above the EXIT box). M13: the live
+  // score rides on the same row, left of the timer.
   ctx.textAlign = 'right';
   ctx.font = 'bold 16px monospace';
-  if (muted) {
-    ctx.fillStyle = '#ff6b57';
-    ctx.fillText(`${formatTime(world.time)} · MUTE`, panels.header.x + panels.header.w - 8, 24);
-    ctx.fillStyle = COLORS.hud;
-  } else {
-    ctx.fillText(formatTime(world.time), panels.header.x + panels.header.w - 8, 24);
-  }
+  const timeText = muted ? `${formatTime(world.time)} · MUTE` : formatTime(world.time);
+  if (muted) ctx.fillStyle = '#ff6b57';
+  ctx.fillText(`SCORE ${score.total} · ${timeText}`, panels.header.x + panels.header.w - 8, 24);
+  ctx.fillStyle = COLORS.hud;
   ctx.textAlign = 'left';
 
   // Suspicion: segmented bar (M11, top-10 ALARM/HEAT style) + state
@@ -232,11 +392,11 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   const segH = 10;
   const segGap = 2;
   const segTotal = 5;
-  const pulse = worst.suspicion > 0.7 ? 0.65 + 0.35 * Math.sin(t * 10) : 1;
+  const pulse = worstValue > 0.7 ? 0.65 + 0.35 * Math.sin(t * 10) : 1;
   ctx.globalAlpha = pulse;
   drawSegmentedBar(ctx, barX, barY, segW, segH, segGap,
-    segmentCount(worst.suspicion, segTotal), segTotal,
-    worst.suspicion > 0 ? COLORS.meterHigh : COLORS.meterLow);
+    segmentCount(worstValue, segTotal), segTotal,
+    worstValue > 0 ? COLORS.meterHigh : COLORS.meterLow);
   ctx.globalAlpha = 1;
   const pill = alarming ? pillByState.alarm
     : (pillByState[worst.state] || pillByState.patrol);
@@ -254,14 +414,23 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   ctx.textAlign = 'center';
   ctx.fillText(label, px + (tw + 16) / 2, py + 13);
   ctx.textAlign = 'left';
+  // M13: the alarm stage word right after the pill (CALM / UNEASY /
+  // HUNTED / ALARM) — the stage is a display mapping over the worst
+  // suspicion, so it never disagrees with the bar next to it.
+  const stage = alarmStage(worstValue, alarming);
+  ctx.fillStyle = STAGE_COLORS[stage];
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText(stage, px + tw + 16 + 8, py + 13);
 
   // M12: coin counter, right-aligned on the meter row (the row's
   // right side was empty; the count never moves the other HUD rows).
+  // M13: the smoke counter rides next to it, same row, same gold.
   const coins = typeof world.coins === 'number' ? world.coins : 0;
+  const smokes = typeof world.smokes === 'number' ? world.smokes : 0;
   ctx.fillStyle = COLORS.coin;
   ctx.font = 'bold 14px monospace';
   ctx.textAlign = 'right';
-  ctx.fillText(`COINS ×${coins}`, panels.header.x + panels.header.w - 8, barY + 10);
+  ctx.fillText(`COINS ×${coins} · SMOKE ×${smokes}`, panels.header.x + panels.header.w - 8, barY + 10);
   ctx.textAlign = 'left';
 
   // M8: short legend ONLY on the play HUD — no controls line (full
@@ -279,13 +448,24 @@ export function drawHud(ctx, world, screen, t, muted = false) {
     ? `   |   ${cameraStatesShort(cameraStates(world.cameras))}`
     : '';
   ctx.fillText(`LIGHT=danger · DARK=safe · CARPET=silent${camRoster}`, 16, 68);
-  // Per-guard state list (M8 compressed) + props with names and checkmarks.
-  ctx.fillText(
-    guardStatesShort(guardStates(world.guards))
-    + `   |   Props ${summary.taken}/${summary.total} `
-    + summary.items.map((i) => `${i.taken ? '✓' : '○'} ${i.name}`).join(' '),
-    16, 84,
-  );
+  // Per-guard state list (M8 compressed, M13 with tile distances)
+  // + objective checklist (✓ taken) + informative SPOTTED count.
+  // The roster falls back to distances for the 3 nearest guards,
+  // then to no distances, when the line would overflow the panel.
+  const states = guardStates(world.guards);
+  const checklist = propsChecklistLine(summary);
+  const spotted = `SPOTTED ×${world.detections}`;
+  let roster = guardStatesShort(states, world.player);
+  let rosterLine = `${roster}   |   ${checklist}   |   ${spotted}`;
+  if (ctx.measureText(rosterLine).width > panels.header.w - 32) {
+    roster = guardStatesShort(states, world.player, 3);
+    rosterLine = `${roster}   |   ${checklist}   |   ${spotted}`;
+  }
+  if (ctx.measureText(rosterLine).width > panels.header.w - 32) {
+    roster = guardStatesShort(states);
+    rosterLine = `${roster}   |   ${checklist}   |   ${spotted}`;
+  }
+  ctx.fillText(rosterLine, 16, 84);
   // SOUND line + noise segment bar, inside the noise panel. Bar: 0 =
   // silent, 1 = carpet (40px), 5 = wood (140px) — scaled from the same
   // lastNoise radius the text reports.
@@ -296,6 +476,9 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   ctx.fillStyle = COLORS.hudDim;
   ctx.font = '12px monospace';
   ctx.fillText(lastNoiseText(world), panels.noise.x + 12 + 5 * 8 + 4 * 2 + 8, panels.noise.y + 15);
+
+  // M13: tactical minimap, bottom-right, always on (play + paused).
+  drawMinimap(ctx, world);
 
   if (screen === 'paused') {
     // M11: moved 130 -> 170 — the noise panel now runs y104..126 and

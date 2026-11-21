@@ -119,6 +119,18 @@ export function createAudio() {
       blip(2093, 0.12, 0.12, 'sine', 0.05);
     },
 
+    // Smoke puff: a soft low sigh when a thrown smoke lands.
+    smoke() {
+      blip(220, 0.18, 0.12, 'sine');
+      blip(165, 0.22, 0.08, 'sine', 0.06);
+    },
+
+    // Laser trip: a sharp two-tone zap when the beam is crossed.
+    laser() {
+      blip(1200, 0.06, 0.2, 'square');
+      blip(300, 0.12, 0.2, 'square', 0.06);
+    },
+
     // Alarm sting when a chase starts: two-tone square, short.
     alarm() {
       blip(660, 0.12, 0.25, 'square');

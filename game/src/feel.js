@@ -10,12 +10,14 @@ const SHAKE_DECAY = 1.2; // trauma lost per real second (game-feel §1)
 const MAX_OFFSET = { x: 12, y: 8 }; // px at full trauma
 const ALERT_SHOW_S = 0.9; // seconds the "!" stays above a guard
 const PROP_FLASH_S = 1.0; // seconds the "+1 PROP" flash stays up
+const LASER_FLASH_S = 1.0; // seconds the "TRIPPED!" flash stays up
 
 export function createFeel() {
   return {
     shake: 0, // trauma 0..1
     alerts: [], // { guard, age } — "!" above the guard
     propFlash: 0, // 1 -> 0 over PROP_FLASH_S after a pickup
+    laserFlash: 0, // 1 -> 0 over LASER_FLASH_S after a laser trip
     time: 0, // accumulated real time, drives the shake sines
     audioQueue: [], // sound names for main.js to play, then cleared
     // Real-time update (called by main.js every frame, even on the
@@ -26,6 +28,7 @@ export function createFeel() {
       for (const a of this.alerts) a.age += dt;
       this.alerts = this.alerts.filter((a) => a.age < ALERT_SHOW_S);
       this.propFlash = Math.max(0, this.propFlash - dt / PROP_FLASH_S);
+      this.laserFlash = Math.max(0, this.laserFlash - dt / LASER_FLASH_S);
     },
   };
 }
@@ -42,6 +45,20 @@ export function queueAudio(feel, name) {
 // is empty — each sound fires exactly once).
 export function drainAudio(feel) {
   return feel.audioQueue.splice(0, feel.audioQueue.length);
+}
+
+// M13: a smoke lands — one soft puff, no shake (small tier, like
+// the coin clink). The cloud itself carries the feedback.
+export function triggerSmoke(feel) {
+  queueAudio(feel, 'smoke');
+}
+
+// M13: the player trips a laser — "TRIPPED!" flash + a sharp zap,
+// no shake (small tier: the flash + the suspicion jump carry it;
+// a trip must never shake the aim while the player is crossing).
+export function triggerLaser(feel) {
+  feel.laserFlash = 1;
+  queueAudio(feel, 'laser');
 }
 
 // M12: a coin lands — one clink, no shake (small tier: a tick, not

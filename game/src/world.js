@@ -10,9 +10,11 @@ import { canSee, segmentBlocked } from './vision.js';
 import { noiseRadiusAt } from './detection.js';
 import { createGuard, stepGuard, forceChase } from './guard.js';
 import { createCamera, stepCamera, cameraSees } from './camera.js';
+import { createLaser, stepLaser, laserTripsPlayer } from './laser.js';
 import {
   createFeel, triggerAlert, triggerProp, triggerCaught,
   triggerCoin, triggerCameraAlarm, markAlert,
+  triggerSmoke, triggerLaser,
 } from './feel.js';
 
 // Re-exported for callers that used the M1 location (moved to vision.js).
@@ -42,6 +44,14 @@ export function createWorld() {
     coinFlight: null, // { x0, y0, x1, y1, t, dur } while a coin is in the air
     coinRing: null, // { x, y, radius, age } — gold landing ring, audible 0.5s
     coinCooldown: 0, // seconds until the next throw is allowed
+    // M13: the smoke gadget (same throw path as the coin) + the laser
+    // tripwires (level.lasers) + the laser meter. Smoke is silent:
+    // no ring, no noise — it only ever blocks sight.
+    smokes: CONFIG.SMOKE_COUNT, // throws left this run, no refill
+    smokeFlight: null, // { x0, y0, x1, y1, t, dur } while a smoke is in the air
+    smokeClouds: [], // { x, y, r, age } — live clouds, 4s each
+    lasers: level.lasers.map((spec) => createLaser(spec)),
+    laserSuspicion: 0, // 0..1 — the laser meter (trip +0.6, decays like suspicion)
     // M12: building alarm — raised when a camera's suspicion hits 1.0,
     // cleared after ALARM_CALM_S with no camera seeing the player.
     alarm: { active: false, unseen: 0 },
@@ -88,10 +98,11 @@ function moveCircle(body, dx, dy, blockers) {
 
 // Kept contract (M1): seen = inside cone AND line of sight (2-point
 // raycast) not blocked by a wall or cover. Any guard seeing counts.
+// M13: smoke clouds block the sight line like a wall.
 export function isSeenByGuard(world) {
   const blockers = world.walls.concat(world.covers);
   return world.guards.some(
-    (guard) => canSee(guard, world.player, blockers).seen,
+    (guard) => canSee(guard, world.player, blockers, world.smokeClouds || []).seen,
   );
 }
 
@@ -125,6 +136,40 @@ export function throwCoin(world, tx, ty) {
   world.coinFlight = {
     x0: world.player.x, y0: world.player.y,
     x1, y1, t: 0, dur: CONFIG.COIN_FLIGHT_S,
+  };
+  return true;
+}
+
+// M13 smoke throw: the same throw path as the coin (mouse aim, 200px
+// max, clamped inside the walls, 0.35s flight) and the SAME 0.5s
+// cooldown — a throw of either kind blocks the next throw of either
+// kind. False when there is nothing to throw (0 smokes, cooling
+// down, anything already flying, not playing). The landing makes a
+// silent 4s cloud, never a ring and never a noise.
+export function throwSmoke(world, tx, ty) {
+  if (world.status !== 'playing') return false;
+  if (world.smokes <= 0) return false;
+  if (world.coinCooldown > 0) return false;
+  if (world.coinFlight || world.smokeFlight) return false;
+  let dx = tx - world.player.x;
+  let dy = ty - world.player.y;
+  const len = Math.hypot(dx, dy);
+  if (len > CONFIG.COIN_THROW_DIST) {
+    dx = (dx / len) * CONFIG.COIN_THROW_DIST;
+    dy = (dy / len) * CONFIG.COIN_THROW_DIST;
+  } else if (len < 1e-9) {
+    dx = CONFIG.COIN_THROW_DIST;
+    dy = 0;
+  }
+  const x1 = Math.max(CONFIG.WALL, Math.min(
+    CONFIG.VIEW_WIDTH - CONFIG.WALL, world.player.x + dx));
+  const y1 = Math.max(CONFIG.WALL, Math.min(
+    CONFIG.VIEW_HEIGHT - CONFIG.WALL, world.player.y + dy));
+  world.smokes -= 1;
+  world.coinCooldown = CONFIG.COIN_COOLDOWN_S;
+  world.smokeFlight = {
+    x0: world.player.x, y0: world.player.y,
+    x1, y1, t: 0, dur: CONFIG.SMOKE_FLIGHT_S,
   };
   return true;
 }
@@ -192,15 +237,56 @@ export function step(world, input, dt) {
     if (world.coinRing.age >= CONFIG.COIN_RING_S) world.coinRing = null;
   }
 
+  // M13 smoke: a flying smoke lands after SMOKE_FLIGHT_S (a silent
+  // grey cloud, no ring, no noise) and lives SMOKE_CLOUD_S. Clouds
+  // age out on their own — the world never holds a stale one.
+  if (world.smokeFlight) {
+    world.smokeFlight.t += dt;
+    if (world.smokeFlight.t >= world.smokeFlight.dur) {
+      const { x1, y1 } = world.smokeFlight;
+      world.smokeFlight = null;
+      world.smokeClouds.push({
+        x: x1, y: y1, r: CONFIG.SMOKE_CLOUD_R, age: 0,
+      });
+      triggerSmoke(world.feel);
+    }
+  }
+  for (const cloud of world.smokeClouds) cloud.age += dt;
+  world.smokeClouds = world.smokeClouds.filter(
+    (c) => c.age < CONFIG.SMOKE_CLOUD_S);
+
+  // M13 lasers: pulse the phase clock, then check the player against
+  // each live beam. A trip adds LASER_TRIP_SUSPICION to the laser
+  // meter (two trips in one ON window reach the alarm); otherwise
+  // the meter decays like suspicion. Smoke never blocks a laser —
+  // the trip test is a pure segment test, no vision involved.
+  let trippedNow = false;
+  for (const laser of world.lasers) {
+    stepLaser(laser, dt);
+    if (laserTripsPlayer(laser, world.player)) {
+      trippedNow = true;
+      world.laserSuspicion = Math.min(1,
+        world.laserSuspicion + CONFIG.LASER_TRIP_SUSPICION);
+      triggerLaser(world.feel);
+    }
+  }
+  if (!trippedNow) {
+    world.laserSuspicion = Math.max(0,
+      world.laserSuspicion - CONFIG.SUSPICION_DECAY * dt);
+  }
+
   // M12 cameras: sweep + suspicion (same meter as guards). A camera
   // at 1.0 raises the building alarm BEFORE the guard loop runs, so
   // the loop's chase-entry check does not double-count the forced
   // chase (detections are counted here, once per guard).
+  // M13: the laser meter feeds the same alarm — a laserSuspicion of
+  // 1.0 raises the alarm through the same path. `worst` starts at
+  // the laser meter, so the exposure bar shows it too.
   const blockers = world.walls.concat(world.covers);
-  let worst = 0;
+  let worst = world.laserSuspicion;
   let anyCamSees = false;
   for (const cam of world.cameras) {
-    const seen = cameraSees(cam, world.player, blockers);
+    const seen = cameraSees(cam, world.player, blockers, world.smokeClouds);
     const dist = Math.hypot(world.player.x - cam.x, world.player.y - cam.y);
     stepCamera(cam, seen.seen, {
       dist, running: input.run, x: world.player.x, y: world.player.y,
@@ -210,7 +296,8 @@ export function step(world, input, dt) {
   }
   if (!world.alarm.active) {
     const alarming = world.cameras.find(
-      (cam) => cam.suspicion >= CONFIG.CHASE_AT);
+      (cam) => cam.suspicion >= CONFIG.CHASE_AT)
+      || world.laserSuspicion >= CONFIG.CHASE_AT;
     if (alarming) {
       world.alarm.active = true;
       world.alarm.unseen = 0;
@@ -245,7 +332,7 @@ export function step(world, input, dt) {
   // FSM), independently per guard. `worst` already holds the camera
   // max — exposure is the worst suspicion of guards AND cameras.
   for (const guard of world.guards) {
-    const seen = canSee(guard, world.player, blockers);
+    const seen = canSee(guard, world.player, blockers, world.smokeClouds);
     const dist = Math.hypot(
       world.player.x - guard.x,
       world.player.y - guard.y,

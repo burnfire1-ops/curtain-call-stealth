@@ -85,6 +85,21 @@ export function buildLevel() {
       { name: 'CAM 1', x: 520, y: 60, baseAngleDeg: 90 },
       { name: 'CAM 2', x: 900, y: 300, baseAngleDeg: 180 },
     ],
+    // M13 laser tripwires (level-design: timed gates, never walls —
+    // the player crosses freely while OFF and pays while ON; neither
+    // beam touches the Probe T route (top wall y=32 / x=200 west
+    // side), so the timed win stays winnable; both are bypassable —
+    // LASER 1 by crossing west of x=660, LASER 2 by crossing north
+    // of y=160 or south of y=280).
+    // LASER 1: across the vault corridor between U4 (y=200) and U5
+    // (y=380) — the east crossing to the Violin. LASER 2: vertical
+    // gate in the Auditorium, on the eastward path from the Foyer —
+    // it guards the direct route without touching the Mask approach
+    // (y=90) or any patrol route.
+    lasers: [
+      { name: 'LASER 1', x1: 660, y1: 290, x2: 940, y2: 290 },
+      { name: 'LASER 2', x1: 460, y1: 160, x2: 460, y2: 280 },
+    ],
     // Binary lighting (tesis differentiator 4): warm pools = danger
     // (suspicion x1.0), dark wings = safe (suspicion x0.35).
     lightPools: [
