@@ -309,30 +309,30 @@ export function render(ctx, world, screen, t = 0, muted = false) {
   if (screen === 'play' || screen === 'paused') drawHud(ctx, world, screen, t, muted);
   if (screen === 'start') {
     drawOverlay(ctx, 'CURTAIN CALL', [
-      'Curi kembali 3 properti sebelum tirai naik.',
-      'Sembunyi di balik tirai merah. Jangan masuk cone kuning usher.',
-      'Ambil Tiara, Topeng, Biola — lalu capai EXIT. Props opsional:',
-      'exit selalu bisa dicapai tanpa properti.',
-      'Cahaya = bahaya · Gelap = aman · Karpet = senyap',
+      'Steal back 3 props before the curtain rises.',
+      'Hide behind the red curtains. Stay out of the ushers’ yellow cones.',
+      'Grab the Tiara, Mask, Violin — then reach the EXIT. Props are optional:',
+      'the exit is always reachable without props.',
+      'Light = danger · Dark = safe · Carpet = silent',
       '',
-      'WASD gerak · Shift lari · P jeda · M suara',
-      'Tekan ENTER atau klik untuk mulai',
+      'WASD move · Shift run · P pause · M sound',
+      'Press ENTER or click to start',
     ]);
   } else if (screen === 'win') {
     const taken = world.props.filter((p) => p.taken).length;
     const rank = winRank(world.detections);
-    drawOverlay(ctx, `${rank} — LOLOS!`, [
-      `Waktu: ${formatTime(world.time)} · Props ${taken}/3 · Terdeteksi ${world.detections}x`,
+    drawOverlay(ctx, `${rank} — ESCAPED!`, [
+      `Time: ${formatTime(world.time)} · Props ${taken}/3 · Spotted ${world.detections}x`,
       rank === 'GHOST'
-        ? 'Tidak terlihat sama sekali — sempurna.'
-        : 'Kau sempat terlihat, tapi berhasil lolos.',
-      'Tekan R / Enter untuk main lagi',
+        ? 'Never seen at all — perfect.'
+        : 'You were spotted, but you still escaped.',
+      'Press R / Enter to play again',
     ]);
   } else if (screen === 'lose') {
-    drawOverlay(ctx, 'KETANGKAP!', [
-      `${world.caughtBy || 'Seorang usher'} menangkapmu.`,
-      'Usher melihatmu terlalu lama di dalam cone.',
-      'Tekan R / Enter untuk coba lagi',
+    drawOverlay(ctx, 'CAUGHT!', [
+      `${world.caughtBy || 'An usher'} caught you.`,
+      'An usher saw you inside the cone for too long.',
+      'Press R / Enter to try again',
     ]);
   }
   ctx.restore();

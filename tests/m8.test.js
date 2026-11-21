@@ -41,8 +41,8 @@ test('hud M8: two alerted guards are both named', () => {
 });
 
 test('hud M8: LEGEND constant still carries all four rules (m4 lock)', () => {
-  assert.match(LEGEND, /CAHAYA=bahaya/);
-  assert.match(LEGEND, /GELAP=aman/);
-  assert.match(LEGEND, /KARPET=senyap/);
-  assert.match(LEGEND, /LARI di kayu=berisik/);
+  assert.match(LEGEND, /LIGHT=danger/);
+  assert.match(LEGEND, /DARK=safe/);
+  assert.match(LEGEND, /CARPET=silent/);
+  assert.match(LEGEND, /RUNNING on wood=noisy/);
 });

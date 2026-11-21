@@ -80,10 +80,10 @@ test('hud: guardStates lists all five ushers in order', () => {
 });
 
 test('hud: LEGEND names all four readability rules', () => {
-  assert.match(LEGEND, /CAHAYA=bahaya/);
-  assert.match(LEGEND, /GELAP=aman/);
-  assert.match(LEGEND, /KARPET=senyap/);
-  assert.match(LEGEND, /LARI di kayu=berisik/);
+  assert.match(LEGEND, /LIGHT=danger/);
+  assert.match(LEGEND, /DARK=safe/);
+  assert.match(LEGEND, /CARPET=silent/);
+  assert.match(LEGEND, /RUNNING on wood=noisy/);
 });
 
 // --- hud.js: win rank ---
@@ -97,14 +97,14 @@ test('hud: winRank is GHOST with zero detections, SPOTTED otherwise', () => {
 // --- hud.js: last noise ---
 
 test('hud: lastNoiseText is silent before any run, then names floor + radius', () => {
-  assert.match(lastNoiseText({ lastNoise: null }), /hening/);
+  assert.match(lastNoiseText({ lastNoise: null }), /silent/);
   assert.match(
     lastNoiseText({ lastNoise: { floor: 'wood', radius: 140 } }),
-    /kayu.*140/,
+    /wood.*140/,
   );
   assert.match(
     lastNoiseText({ lastNoise: { floor: 'carpet', radius: 40 } }),
-    /karpet.*40/,
+    /carpet.*40/,
   );
 });
 

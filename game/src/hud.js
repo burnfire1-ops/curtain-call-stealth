@@ -8,7 +8,7 @@ import CONFIG from './config.js';
 // Legend (tesis differentiator 4): light = danger, dark = safe, and the
 // floor that talks — readable at a glance, also on the judge's sheet.
 export const LEGEND =
-  'CAHAYA=bahaya · GELAP=aman · KARPET=senyap · LARI di kayu=berisik';
+  'LIGHT=danger · DARK=safe · CARPET=silent · RUNNING on wood=noisy';
 
 // Seconds -> "mm:ss", flooring the fraction (a 87.4s run reads 01:27).
 export function formatTime(seconds) {
@@ -69,9 +69,9 @@ export function winRank(detections) {
 // lastNoise is set by world.js only while the player runs.
 export function lastNoiseText(world) {
   const n = world.lastNoise;
-  if (!n) return 'SUARA: hening — jalan kaki senyap';
-  const floor = n.floor === 'carpet' ? 'karpet' : 'kayu';
-  return `SUARA: lari di ${floor} (${n.radius}px)`;
+  if (!n) return 'SOUND: silent — quiet footsteps';
+  const floor = n.floor === 'carpet' ? 'carpet' : 'wood';
+  return `SOUND: running on ${floor} (${n.radius}px)`;
 }
 
 const COLORS = {
@@ -122,10 +122,10 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   // Suspicion meter: worst guard's suspicion, coloured by level; it
   // pulses (alpha throb) while suspicion is high — game-feel, cheap.
   const stateText = {
-    patrol: ['belum terlihat', COLORS.hudDim],
-    suspicious: ['CURIGA! sembunyi!', '#ffce54'],
-    chase: ['KEJAR! lari!', '#ff6b57'],
-    search: ['dia mencarimu…', '#ff9a3d'],
+    patrol: ['unseen', COLORS.hudDim],
+    suspicious: ['SUSPICIOUS! Hide!', '#ffce54'],
+    chase: ['RUN! Hide!', '#ff6b57'],
+    search: ['searching for you…', '#ff9a3d'],
   };
   const [label, labelColor] = stateText[worst.state] || stateText.patrol;
   const mw = 140;
@@ -146,11 +146,11 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   // controls live on the start screen) and no full LEGEND: the LEGEND
   // constant is test-locked to all four rules (tests/m4.test.js) and
   // the complete rules stay on the start screen. The dropped 4th rule
-  // (running on wood is noisy) is carried by the SUARA line + the
+  // (running on wood is noisy) is carried by the SOUND line + the
   // player noise ring instead. One short row, ~270px.
   ctx.fillStyle = COLORS.hudDim;
   ctx.font = '12px monospace';
-  ctx.fillText('CAHAYA=bahaya · GELAP=aman · KARPET=senyap', 16, 68);
+  ctx.fillText('LIGHT=danger · DARK=safe · CARPET=silent', 16, 68);
   // Per-guard state list (M8 compressed) + props with names and checkmarks.
   ctx.fillText(
     guardStatesShort(guardStates(world.guards))
@@ -171,6 +171,6 @@ export function drawHud(ctx, world, screen, t, muted = false) {
     ctx.fillStyle = COLORS.hud;
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('JEDA — tekan P untuk lanjut, R untuk ulang', CONFIG.VIEW_WIDTH / 2, 130);
+    ctx.fillText('PAUSED — press P to resume, R to restart', CONFIG.VIEW_WIDTH / 2, 130);
   }
 }
