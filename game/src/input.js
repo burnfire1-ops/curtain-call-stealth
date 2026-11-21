@@ -1,9 +1,25 @@
 // Keyboard input: WASD / arrows to move, Shift to run.
-// DOM-dependent (thin adapter); the movement math it feeds lives in
-// world.js and is covered by tests/world.test.js.
-export function createInput() {
+// M12: mouse position on the canvas (the coin-throw aim). DOM-dependent
+// (thin adapter); the movement math it feeds lives in world.js and is
+// covered by tests/world.test.js.
+export function createInput(canvas) {
   const keys = new Set();
   const pressed = new Set(); // edge-triggered, cleared each frame
+  // M12: last mouse position in canvas pixels (scaled from the
+  // element rect, so a CSS-scaled canvas still aims true). `moved`
+  // is false until the mouse first moves — main.js falls back to
+  // the player's facing direction until then.
+  const mouse = { x: 0, y: 0, moved: false };
+  if (canvas) {
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width / Math.max(1, rect.width);
+      const sy = canvas.height / Math.max(1, rect.height);
+      mouse.x = (e.clientX - rect.left) * sx;
+      mouse.y = (e.clientY - rect.top) * sy;
+      mouse.moved = true;
+    });
+  }
 
   function onKeyDown(e) {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
@@ -32,6 +48,10 @@ export function createInput() {
     // True once for the frame the key went down.
     wasPressed(code) {
       return pressed.has(code);
+    },
+    // M12: last mouse position on the canvas ({ x, y, moved }).
+    mouse() {
+      return mouse;
     },
     endFrame() {
       pressed.clear();

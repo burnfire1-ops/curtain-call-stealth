@@ -73,6 +73,18 @@ export function buildLevel() {
         waypoints: [{ x: 500, y: 60 }, { x: 900, y: 60 }],
       },
     ],
+    // M12 security cameras (level-design: fixed sensors, each with a
+    // blind window — the sine sweep dwells at its extremes, and the
+    // crate + curtains block their cones like they block guards).
+    // CAM 1 on the north wall by the stage (base south, sweeps the
+    // Golden Mask + stage pool); CAM 2 on the east wall in Backstage
+    // (base west, sweeps the vault corridor between U4/U5). Neither
+    // cone reaches the Probe T route (top wall y=32 / wait point
+    // (200,170)) — the timed win stays winnable.
+    cameras: [
+      { name: 'CAM 1', x: 520, y: 60, baseAngleDeg: 90 },
+      { name: 'CAM 2', x: 900, y: 300, baseAngleDeg: 180 },
+    ],
     // Binary lighting (tesis differentiator 4): warm pools = danger
     // (suspicion x1.0), dark wings = safe (suspicion x0.35).
     lightPools: [

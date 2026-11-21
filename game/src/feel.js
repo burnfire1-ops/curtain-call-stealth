@@ -44,6 +44,27 @@ export function drainAudio(feel) {
   return feel.audioQueue.splice(0, feel.audioQueue.length);
 }
 
+// M12: a coin lands — one clink, no shake (small tier: a tick, not
+// an impact). The ring + the investigating guard carry the feedback.
+export function triggerCoin(feel) {
+  queueAudio(feel, 'coin');
+}
+
+// M12: the camera alarm — one sting + a small shake (medium tier),
+// fired ONCE for the whole building, not once per guard (six
+// overlapping stings would be the bug, not the juice).
+export function triggerCameraAlarm(feel) {
+  addShake(feel, 0.3);
+  queueAudio(feel, 'alarm');
+}
+
+// M12: the "!" above a guard, without the sound — used by the alarm
+// (all six guards alert at once; the sting comes from
+// triggerCameraAlarm, once).
+export function markAlert(feel, guard) {
+  feel.alerts.push({ guard, age: 0 });
+}
+
 // "!" above the guard when Suspicious -> Chase, + the alarm sting.
 export function triggerAlert(feel, guard) {
   feel.alerts.push({ guard, age: 0 });

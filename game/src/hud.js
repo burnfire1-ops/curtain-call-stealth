@@ -59,6 +59,18 @@ export function guardStates(guards) {
   return guards.map((g) => ({ name: g.name, state: g.state }));
 }
 
+// One short line per camera: name + sweep state, in level order.
+// M12: 'sweep' (patrolling its arc) or 'spotted' (suspicion >= 0.5).
+export function cameraStates(cameras) {
+  return (cameras || []).map((c) => ({ name: c.name, state: c.state }));
+}
+
+// M12: camera roster, same shape as the guard list — "CAM 1 SWEEP ·
+// CAM 2 SPOTTED". Pure, unit-tested in tests/m12.test.js.
+export function cameraStatesShort(states) {
+  return states.map((c) => `${c.name} ${c.state.toUpperCase()}`).join(' · ');
+}
+
 // Win rank (tesis Q3): GHOST only when the player was never spotted —
 // detections counts every chase entry, so any alarm breaks the ghost.
 export function winRank(detections) {
@@ -80,6 +92,7 @@ const COLORS = {
   meterBg: '#3a2f24',
   meterLow: '#e8a33d',
   meterHigh: '#dc3c28',
+  coin: '#ffd94d', // M12: the coin counter gold (same gold as props)
   // M11: framed panels (game-ui-ux: panel depth like top-10 LB) —
   // dark translucent fill + 1px light border + offset shadow.
   panelFill: 'rgba(12, 9, 7, 0.82)',
@@ -153,6 +166,12 @@ const pillByState = {
   suspicious: { fill: '#ffce54', border: '#ffce54', text: '#1a140f' },
   chase: { fill: '#ff6b57', border: '#ff6b57', text: '#1a140f' },
   search: { fill: '#ff9a3d', border: '#ff9a3d', text: '#1a140f' },
+  // M12: camera states reuse the guard palette (a spotted camera is
+  // a suspicious-grade alert); 'sweep' is the patrol-grade default.
+  sweep: { fill: 'rgba(232, 179, 61, 0.14)', border: 'rgba(232, 179, 61, 0.45)', text: COLORS.hudDim },
+  spotted: { fill: '#ffce54', border: '#ffce54', text: '#1a140f' },
+  // M12: the building alarm overrides every other pill, solid red.
+  alarm: { fill: '#ff3b30', border: '#ff3b30', text: '#ffffff' },
 };
 
 // Suspicion meter, guard list, props, timer, legend, noise — all the
@@ -162,7 +181,11 @@ const pillByState = {
 // next to the timer (the M key itself is documented on the start
 // screen — the controls line is too long to carry it, see below).
 export function drawHud(ctx, world, screen, t, muted = false) {
-  const worst = worstSuspicion(world.guards);
+  // M12: the meter shows the worst suspicion of guards AND cameras —
+  // a camera filling up is as alarming as a guard filling up.
+  const worst = worstSuspicion(
+    world.guards.concat(world.cameras || []),
+  ) || { state: 'patrol', suspicion: 0 };
   const summary = propsSummary(world.props);
   const panels = hudPanelRects();
 
@@ -191,13 +214,18 @@ export function drawHud(ctx, world, screen, t, muted = false) {
 
   // Suspicion: segmented bar (M11, top-10 ALARM/HEAT style) + state
   // pill sized to the label. Strings unchanged from M10.
+  // M12: a camera 'spotted' reads like a guard 'suspicious'; the
+  // building alarm overrides every pill with a solid-red ALARM!.
   const stateText = {
     patrol: 'unseen',
     suspicious: 'SUSPICIOUS! Hide!',
     chase: 'RUN! Hide!',
     search: 'searching for you…',
+    sweep: 'unseen',
+    spotted: 'SPOTTED! Hide!',
   };
-  const label = stateText[worst.state] || stateText.patrol;
+  const alarming = !!(world.alarm && world.alarm.active);
+  const label = alarming ? 'ALARM!' : (stateText[worst.state] || stateText.patrol);
   const barX = 16;
   const barY = 34;
   const segW = 26;
@@ -210,7 +238,8 @@ export function drawHud(ctx, world, screen, t, muted = false) {
     segmentCount(worst.suspicion, segTotal), segTotal,
     worst.suspicion > 0 ? COLORS.meterHigh : COLORS.meterLow);
   ctx.globalAlpha = 1;
-  const pill = pillByState[worst.state] || pillByState.patrol;
+  const pill = alarming ? pillByState.alarm
+    : (pillByState[worst.state] || pillByState.patrol);
   ctx.font = '12px monospace';
   const tw = ctx.measureText(label).width;
   const px = barX + segTotal * segW + (segTotal - 1) * segGap + 8;
@@ -226,6 +255,15 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   ctx.fillText(label, px + (tw + 16) / 2, py + 13);
   ctx.textAlign = 'left';
 
+  // M12: coin counter, right-aligned on the meter row (the row's
+  // right side was empty; the count never moves the other HUD rows).
+  const coins = typeof world.coins === 'number' ? world.coins : 0;
+  ctx.fillStyle = COLORS.coin;
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`COINS ×${coins}`, panels.header.x + panels.header.w - 8, barY + 10);
+  ctx.textAlign = 'left';
+
   // M8: short legend ONLY on the play HUD — no controls line (full
   // controls live on the start screen) and no full LEGEND: the LEGEND
   // constant is test-locked to all four rules (tests/m4.test.js) and
@@ -234,7 +272,13 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   // player noise ring instead. One short row, ~270px.
   ctx.fillStyle = COLORS.hudDim;
   ctx.font = '12px monospace';
-  ctx.fillText('LIGHT=danger · DARK=safe · CARPET=silent', 16, 68);
+  // M12: the legend line also carries the camera roster — the guard
+  // line below is already near-full in an all-chase alarm, so the
+  // cameras ride here instead of overflowing the panel.
+  const camRoster = (world.cameras && world.cameras.length > 0)
+    ? `   |   ${cameraStatesShort(cameraStates(world.cameras))}`
+    : '';
+  ctx.fillText(`LIGHT=danger · DARK=safe · CARPET=silent${camRoster}`, 16, 68);
   // Per-guard state list (M8 compressed) + props with names and checkmarks.
   ctx.fillText(
     guardStatesShort(guardStates(world.guards))

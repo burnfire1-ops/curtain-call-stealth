@@ -38,6 +38,24 @@ const CONFIG = {
   GUARD_STEP_LEN: 36, // px of guard travel per footstep ring
   RING_FADE_S: 1.0, // seconds a footstep ring stays visible
   PROP_PICKUP_R: 24, // pickup radius (px, plus player radius)
+
+  // M12 coin distraction (game-ai: a sharp, localised sound is an
+  // investigation trigger — the guard walks to the point, looks
+  // around, then gives up) + security cameras (a second sensor that
+  // feeds the same suspicion meter and raises a building alarm).
+  COIN_COUNT: 3, // coins per run, no refill
+  COIN_THROW_DIST: 200, // max throw distance from the player, px
+  COIN_FLIGHT_S: 0.35, // seconds the coin spends in the air
+  COIN_HEAR_RADIUS: 200, // px — guards inside it investigate the landing
+  COIN_HEAR_S: 0.5, // seconds a landed coin stays audible (covers the
+  // guard's MIN_STATE_TIME so no coin is missed mid-transition)
+  COIN_RING_S: 0.8, // seconds the gold landing ring stays visible
+  COIN_COOLDOWN_S: 0.5, // seconds between throws
+  CAM_VIEW_DIST: 180, // camera sight range, px (same as guards)
+  CAM_HALF_ANGLE_DEG: 35, // half of the camera cone (same as guards)
+  CAM_SWEEP_DEG: 50, // camera sweeps +/- this from its base angle
+  CAM_SWEEP_SPEED: 0.5, // rad/s of the sweep sine
+  ALARM_CALM_S: 3.0, // seconds unseen by every camera before the alarm clears
 };
 
 export default CONFIG;

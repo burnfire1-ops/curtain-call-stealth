@@ -6,7 +6,7 @@
 // wood stage, walls, curtain covers, props, patrol routes, cones, guards,
 // player, rings, HUD, overlays.
 import CONFIG from './config.js';
-import { drawHud, drawPanel, formatTime, winRank } from './hud.js';
+import { drawHud, drawPanel, formatTime, winRank, hudPanelRects } from './hud.js';
 import { shakeOffset } from './feel.js';
 
 const COLORS = {
@@ -51,6 +51,15 @@ const COLORS = {
   patrol: 'rgba(232, 179, 61, 0.55)',
   ring: 'rgba(232, 179, 61, 0.55)',
   noiseRing: 'rgba(245, 240, 230, 0.35)',
+  // M12: camera cones are TEAL (45,212,191) — a different colour from
+  // every guard cone, so a camera reads as a different sensor at a
+  // glance (game-ui-ux: colour + label, never colour alone).
+  camCone: { rgb: '45, 212, 191', sweep: 0.18, spotted: 0.32 },
+  camConeEdge: 'rgba(45, 212, 191, 0.60)',
+  camMount: '#2b3a3a',
+  camMountEdge: '#5eead4',
+  coin: '#ffd94d',
+  coinRing: 'rgba(255, 217, 77, 0.80)',
   hud: '#f5f0e6',
   hudDim: '#b8ab98',
   overlay: 'rgba(10, 8, 6, 0.78)',
@@ -99,6 +108,60 @@ function drawCone(ctx, guard, t) {
     ctx.beginPath();
     ctx.arc(guard.x, guard.y, CONFIG.VIEW_DIST, base - half, base + half);
     ctx.stroke();
+  }
+}
+
+// M12: a camera's cone — same wedge shape as a guard cone, but TEAL
+// and with a radial falloff, so it reads as a different sensor. The
+// alpha follows the camera state (spotted = brighter); the sweep
+// itself is the timing tell.
+function drawCameraCone(ctx, cam) {
+  const half = (CONFIG.CAM_HALF_ANGLE_DEG * Math.PI) / 180;
+  const a = cam.state === 'spotted' ? COLORS.camCone.spotted : COLORS.camCone.sweep;
+  const grad = ctx.createRadialGradient(
+    cam.x, cam.y, 10, cam.x, cam.y, CONFIG.CAM_VIEW_DIST);
+  grad.addColorStop(0, `rgba(${COLORS.camCone.rgb}, ${a})`);
+  grad.addColorStop(0.75, `rgba(${COLORS.camCone.rgb}, ${a})`);
+  grad.addColorStop(1, `rgba(${COLORS.camCone.rgb}, 0)`);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(cam.x, cam.y);
+  ctx.arc(cam.x, cam.y, CONFIG.CAM_VIEW_DIST, cam.angle - half, cam.angle + half);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = COLORS.camConeEdge;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cam.x, cam.y);
+  ctx.arc(cam.x, cam.y, CONFIG.CAM_VIEW_DIST, cam.angle - half, cam.angle + half);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+// M12: the wall mount — a small dark box with a teal rim + a lens
+// dot in the facing direction, labelled like a guard. (CAM 1 sits at
+// (520,60), under the HUD header panel y8..92, so its mount is hidden
+// in play and its label is skipped — the cone below the panel is what
+// shows. CAM 2's mount + label are fully visible.)
+function drawCameraMount(ctx, cam) {
+  drawRect(ctx, { x: cam.x - 8, y: cam.y - 5, w: 16, h: 10 },
+    COLORS.camMount, COLORS.camMountEdge);
+  ctx.fillStyle = COLORS.camMountEdge;
+  ctx.beginPath();
+  ctx.arc(cam.x + cam.dir.x * 10, cam.y + cam.dir.y * 10, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  // The label is skipped when the mount sits under the HUD header
+  // panel (CAM 1 at (520,60)): it would show through the translucent
+  // panel on top of USHER 6's label, which patrols the same strip.
+  // The cone below the panel + the roster line carry the camera.
+  const header = hudPanelRects().header;
+  const underPanel = cam.x > header.x && cam.x < header.x + header.w
+    && cam.y > header.y && cam.y < header.y + header.h;
+  if (!underPanel) {
+    ctx.fillStyle = COLORS.hudDim;
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(cam.name, cam.x, cam.y - 12);
   }
 }
 
@@ -176,6 +239,39 @@ function drawRings(ctx, world) {
     ctx.stroke();
     ctx.setLineDash([]);
   }
+  // M12: the thrown coin — a gold dot arcing to its landing point
+  // (game-feel: the arc + the ring sell the throw; the simulation
+  // only ever sees the landing point), then the expanding gold
+  // landing ring, the circle every guard inside it can hear.
+  if (world.coinFlight) {
+    const f = world.coinFlight;
+    const p = Math.min(1, f.t / f.dur);
+    const cx = f.x0 + (f.x1 - f.x0) * p;
+    const cy = f.y0 + (f.y1 - f.y0) * p - Math.sin(p * Math.PI) * 28;
+    ctx.strokeStyle = 'rgba(255, 217, 77, 0.35)';
+    ctx.setLineDash([3, 5]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(f.x0, f.y0);
+    ctx.quadraticCurveTo(
+      (f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2 - 56, f.x1, f.y1);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    drawCircle(ctx, cx, cy, 5, COLORS.coin, '#1a140f');
+  }
+  if (world.coinRing) {
+    const r = world.coinRing;
+    const grow = Math.min(1, r.age / 0.3);
+    ctx.strokeStyle = COLORS.coinRing;
+    ctx.globalAlpha = Math.max(0, 1 - r.age / CONFIG.COIN_RING_S) * 0.9;
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, Math.max(4, r.radius * grow), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawProps(ctx, world) {
@@ -330,6 +426,7 @@ export function render(ctx, world, screen, t = 0, muted = false) {
 
   for (const guard of world.guards) drawPatrolRoute(ctx, guard);
   for (const guard of world.guards) drawCone(ctx, guard, t);
+  for (const cam of world.cameras || []) drawCameraCone(ctx, cam);
 
   for (const wall of world.walls) drawRect(ctx, wall, COLORS.wall);
   for (const cover of world.covers) {
@@ -372,6 +469,10 @@ export function render(ctx, world, screen, t = 0, muted = false) {
       ctx.stroke();
     }
   }
+
+  // M12: camera mounts (drawn after the covers, so the box sits on
+  // the wall instead of under it).
+  for (const cam of world.cameras || []) drawCameraMount(ctx, cam);
 
   // Exit: green stage door + soft glow halo (M11) so the goal reads
   // from anywhere on the map.
@@ -441,8 +542,9 @@ export function render(ctx, world, screen, t = 0, muted = false) {
       'Grab the Tiara, Mask, Violin — then reach the EXIT. Props are optional:',
       'the exit is always reachable without props.',
       'Light = danger · Dark = safe · Carpet = silent',
+      'C throws a coin to distract guards · Cameras sweep teal cones — time them.',
       '',
-      'WASD move · Shift run · P pause · M sound',
+      'WASD move · Shift run · C throw coin · P pause · M sound',
       'Press ENTER or click to start',
     ]);
   } else if (screen === 'win') {

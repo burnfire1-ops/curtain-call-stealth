@@ -20,30 +20,43 @@ function stageGuard(world, i, { x, y, dir, state, stateTime, suspicion, lastKnow
 export function applyShot(name) {
   const world = createWorld();
   if (name === 'play') {
-    // Mid-action in the Auditorium: player on the carpet behind curtain B,
-    // usher 3 CHASING the player's last-known spot — red cone closes in,
-    // "!" above the guard, footstep rings on the floor. (M5 final
-    // screenshot 2: hiding behind the curtain, red cone near.)
-    stageGuard(world, 2, {
-      x: 650, y: 450, dir: { x: -0.98, y: -0.18 },
-      state: 'chase', stateTime: 0.5, suspicion: 1.0,
-      lastKnown: { x: 540, y: 430 },
+    // M12: coin showcase — the player threw a coin toward the stage
+    // (gold ring at the landing point), CAM 1's teal cone is sweeping
+    // onto the player, and USHER 2 is walking to investigate the
+    // clink (Search, last-known = the coin). COINS ×2 in the HUD.
+    const cam1 = world.cameras[0];
+    cam1.angle = Math.atan2(230 - cam1.y, 500 - cam1.x);
+    cam1.dir = { x: Math.cos(cam1.angle), y: Math.sin(cam1.angle) };
+    cam1.suspicion = 0.6;
+    cam1.state = 'spotted';
+    world.coinRing = { x: 600, y: 140, radius: 200, age: 0.1 };
+    world.coins = 2;
+    stageGuard(world, 1, {
+      x: 560, y: 210, dir: { x: 0.55, y: -0.83 },
+      state: 'search', stateTime: 0.5, suspicion: 0.2,
+      lastKnown: { x: 600, y: 140 },
     });
-    world.player.x = 540;
-    world.player.y = 430;
+    world.guards[1].searchTimeLeft = 2.0;
+    world.player.x = 500;
+    world.player.y = 230;
     world.player.dir = { x: 1, y: 0 };
     world.rings = [
-      { x: 630, y: 450, age: 0.2, kind: 'guard' },
-      { x: 610, y: 450, age: 0.5, kind: 'guard' },
+      { x: 550, y: 220, age: 0.2, kind: 'guard' },
+      { x: 540, y: 230, age: 0.5, kind: 'guard' },
     ];
-    world.feel.alerts.push({ guard: world.guards[2], age: 0 });
-    world.exposure = 1.0;
+    world.exposure = 0.6;
     return { world, screen: 'play' };
   }
   if (name === 'chase') {
-    // Alarm moment: suspicion full, usher 1 CHASES the player's
-    // last-known position — cone red. (Candidate for the M5 screenshot
-    // 4-alarm.)
+    // Alarm moment: CAM 1's suspicion is full, so the building alarm
+    // is active (red ALARM! pill) and usher 1 CHASES the player's
+    // last-known position — cone red, teal camera cone on the player.
+    const cam1 = world.cameras[0];
+    cam1.angle = Math.atan2(300 - cam1.y, 360 - cam1.x);
+    cam1.dir = { x: Math.cos(cam1.angle), y: Math.sin(cam1.angle) };
+    cam1.suspicion = 1.0;
+    cam1.state = 'spotted';
+    world.alarm = { active: true, unseen: 0 };
     stageGuard(world, 0, {
       x: 420, y: 300, dir: { x: -1, y: 0 },
       state: 'chase', stateTime: 0.5, suspicion: 1.0,

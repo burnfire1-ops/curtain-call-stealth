@@ -20,6 +20,11 @@ export function createGuard({ x, y, waypoints, speed = CONFIG.GUARD_SPEED, name 
     lastKnown: null, // { x, y } — last position the player was SEEN at
     searchTimeLeft: 0,
     stepAcc: 0, // px walked since the last footstep ring (world.js reads it)
+    // M12: a heard COIN sets investigate — the guard walks to the
+    // landing point instead of just standing suspicious. Run noise
+    // never sets it (a moving footstep is a vague sound, a clink is
+    // a point), so M3 run-noise behaviour is unchanged.
+    investigate: false,
   };
 }
 
@@ -42,7 +47,9 @@ function changeState(guard, next) {
   if (next === 'patrol') {
     guard.suspicion = 0;
     guard.wpIndex = nearestWaypointIndex(guard);
+    guard.investigate = false; // investigation done — back to the route
   }
+  if (next === 'chase') guard.investigate = false; // a seen player outranks a noise
 }
 
 function faceToward(guard, target) {
@@ -104,6 +111,17 @@ function patrolMove(guard, dt, blockers = []) {
   }
 }
 
+// M12 alarm: the building alarm sends EVERY guard after the player
+// at once — last-known is the player's position, suspicion is full
+// (so the chase survives the ~0.4s it takes the meter to fall under
+// CHASE_EXIT), and the guard chases from wherever it stands. The
+// normal FSM then takes over (chase -> search -> patrol).
+export function forceChase(guard, pos) {
+  changeState(guard, 'chase');
+  guard.lastKnown = { x: pos.x, y: pos.y };
+  guard.suspicion = 1;
+}
+
 // perception: { seen, dist, player: { x, y }, running,
 //   heard?: { x, y } — noise point, when the player ran within earshot,
 //   blockers?: rects — covers/walls the guard must not walk through }
@@ -127,8 +145,14 @@ export function stepGuard(guard, perception, dt) {
   // continues (stateTime refresh) — but only while suspicion is low: once
   // the meter itself holds the guard suspicious, normal transitions
   // (including chase at 1.0) must not be starved by the refresh.
-  if (perception.heard) {
+  // M12: a chasing guard ignores noise (it already sees the player —
+  // a coin must never redirect a chase onto the coin itself). A
+  // searching guard re-targets to the noise point. A coin heard
+  // (heard.coin) arms investigate: the guard walks to the point in
+  // Search instead of returning to Patrol from Suspicious.
+  if (perception.heard && guard.state !== 'chase') {
     guard.lastKnown = { x: perception.heard.x, y: perception.heard.y };
+    if (perception.heard.coin) guard.investigate = true;
     if (guard.state === 'patrol' && guard.stateTime >= CONFIG.MIN_STATE_TIME) {
       changeState(guard, 'suspicious');
       faceToward(guard, guard.lastKnown);
@@ -157,7 +181,9 @@ export function stepGuard(guard, perception, dt) {
       if (guard.suspicion >= CONFIG.CHASE_AT && minTime) {
         changeState(guard, 'chase');
       } else if (guard.suspicion < CONFIG.SUSPICIOUS_EXIT && minTime) {
-        changeState(guard, 'patrol');
+        // M12: a heard coin sends the guard to Search (walk to the
+        // point, look around 2s) instead of straight back to Patrol.
+        changeState(guard, guard.investigate ? 'search' : 'patrol');
       }
       break;
     }

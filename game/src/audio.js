@@ -113,6 +113,12 @@ export function createAudio() {
       } catch (e) { /* ignore */ }
     },
 
+    // Coin clink: a bright metallic tick when a thrown coin lands.
+    coinClink() {
+      blip(1567, 0.08, 0.18, 'sine');
+      blip(2093, 0.12, 0.12, 'sine', 0.05);
+    },
+
     // Alarm sting when a chase starts: two-tone square, short.
     alarm() {
       blip(660, 0.12, 0.25, 'square');

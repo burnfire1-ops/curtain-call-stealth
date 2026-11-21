@@ -3,7 +3,7 @@
 // Screen flow lives in screens.js (pure, unit-tested); HUD in hud.js;
 // audio in audio.js (lazy, never throws without an audio device).
 import CONFIG from './config.js';
-import { createWorld, step } from './world.js';
+import { createWorld, step, throwCoin } from './world.js';
 import { createInput } from './input.js';
 import { render } from './render.js';
 import { applyShot } from './shots.js';
@@ -28,7 +28,7 @@ if (shot === 'start' || shot === 'play' || shot === 'end' || shot === 'chase'
 } else {
   let world = createWorld();
   let screen = 'start'; // 'start' | 'play' | 'paused' | 'win' | 'lose'
-  const input = createInput();
+  const input = createInput(canvas); // M12: canvas passed for mouse aim
   const audio = createAudio();
   let stepTimer = 0; // seconds since the last guard-footstep sound
   let tReal = 0; // accumulated real time, drives HUD pulse + cone blink
@@ -79,6 +79,21 @@ if (shot === 'start' || shot === 'play' || shot === 'end' || shot === 'chase'
     world.feel.update(dt);
 
     if (screen === 'play') {
+      // M12: C throws a coin — aim at the mouse; before the mouse
+      // ever moves, throw along the facing direction. throwCoin
+      // itself enforces count / cooldown / flight, so a spent C is
+      // a silent no-op.
+      if (input.wasPressed('KeyC')) {
+        const m = input.mouse();
+        const target = m.moved
+          ? { x: m.x, y: m.y }
+          : {
+            x: world.player.x + world.player.dir.x * CONFIG.COIN_THROW_DIST,
+            y: world.player.y + world.player.dir.y * CONFIG.COIN_THROW_DIST,
+          };
+        throwCoin(world, target.x, target.y);
+      }
+
       const prevStatus = world.status;
       step(world, input.axis(), dt);
       if (world.status === 'won') screen = 'win';
@@ -106,6 +121,7 @@ if (shot === 'start' || shot === 'play' || shot === 'end' || shot === 'chase'
         if (name === 'alarm') audio.alarm();
         else if (name === 'prop') audio.propChime();
         else if (name === 'caught') audio.thud();
+        else if (name === 'coin') audio.coinClink(); // M12: coin lands
       }
       // Win/lose stingers fire once, on the status transition.
       if (prevStatus === 'playing' && world.status === 'won') audio.win();
