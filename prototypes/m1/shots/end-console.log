@@ -1,0 +1,47 @@
+[1121/195410.308875:WARNING:chrome/app/chrome_main_linux.cc:84] Read channel stable from /home/hatch/workspace/chip404/chrome/opt/google/chrome/CHROME_VERSION_EXTRA
+[13183:13201:1121/195410.327652:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+[13183:13201:1121/195410.327751:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13201:1121/195410.328940:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+[13183:13201:1121/195410.329023:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+[13183:13201:1121/195410.329053:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+[13183:13201:1121/195410.329077:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13201:1121/195410.330036:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.330394:WARNING:net/proxy_resolution/proxy_config_service_linux.cc:97] Proxy authentication parameters ignored, see bug 16709
+[13183:13204:1121/195410.333588:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13204:1121/195410.333620:WARNING:dbus/object_proxy.cc:439] Failed to connect to NameOwnerChanged signal for object: /org/freedesktop/portal/desktop
+[13183:13204:1121/195410.333633:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13204:1121/195410.333643:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13201:1121/195410.347157:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.348655:INFO:components/enterprise/browser/controller/chrome_browser_cloud_management_controller.cc:247] No machine level policy manager exists.
+[13218:13218:1121/195410.409204:WARNING:media/gpu/vaapi/vaapi_wrapper.cc:1652] drmGetDevices2() has not found any devices
+[13218:13218:1121/195410.411682:WARNING:sandbox/policy/linux/sandbox_linux.cc:405] InitializeSandbox() called with multiple threads in process gpu-process.
+[13183:13201:1121/195410.452308:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.452882:WARNING:net/proxy_resolution/proxy_config_service_linux.cc:97] Proxy authentication parameters ignored, see bug 16709
+[13183:13183:1121/195410.486019:WARNING:net/proxy_resolution/proxy_config_service_linux.cc:97] Proxy authentication parameters ignored, see bug 16709
+[13183:13183:1121/195410.504030:WARNING:net/proxy_resolution/proxy_config_service_linux.cc:97] Proxy authentication parameters ignored, see bug 16709
+[13183:13183:1121/195410.600336:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13183:1121/195410.603463:WARNING:device/bluetooth/dbus/bluez_dbus_manager.cc:209] Floss manager service not available, cannot set Floss enable/disable.
+[13183:13201:1121/195410.603692:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.603798:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13201:1121/195410.604037:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.604742:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13183:1121/195410.612709:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13201:1121/195410.620595:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.645748:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13183:1121/195410.692131:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13201:1121/195410.692143:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+[13183:13201:1121/195410.692214:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Failed to connect to socket /run/dbus/system_bus_socket: No such file or directory
+[13183:13201:1121/195410.692373:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.701690:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13183:1121/195410.716184:WARNING:dbus/property.cc:94] Failed to connect to PropertiesChangedsignal.
+[13183:13183:1121/195410.716412:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.Properties.GetAll: object_path= /org/freedesktop/UPower/devices/DisplayDevice: unknown error type: 
+[13183:13183:1121/195410.716429:WARNING:dbus/property.cc:174] GetAll request failed for: org.freedesktop.UPower.Device
+[13183:13183:1121/195410.716444:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13201:1121/195410.717216:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.741015:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13201:1121/195410.741318:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[13183:13183:1121/195410.780533:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[13183:13183:1121/195410.780578:WARNING:ui/base/idle/idle_linux.cc:111] None of the known D-Bus ScreenSaver services could be used.
+31982 bytes written to file prototypes/m1/shots/end.png
+[13220:13238:1121/195411.669767:WARNING:net/extras/sqlite/sqlite_persistent_store_backend_base.cc:182] Failed to post task from LoadReportingClientsAndNotifyInBackground@net/extras/sqlite/sqlite_persistent_reporting_and_nel_store.cc:1419 to client_task_runner_.
+[13220:13238:1121/195411.669923:WARNING:net/extras/sqlite/sqlite_persistent_store_backend_base.cc:182] Failed to post task from LoadNelPoliciesAndNotifyInBackground@net/extras/sqlite/sqlite_persistent_reporting_and_nel_store.cc:1305 to client_task_runner_.
