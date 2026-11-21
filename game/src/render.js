@@ -6,12 +6,14 @@
 // wood stage, walls, curtain covers, props, patrol routes, cones, guards,
 // player, rings, HUD, overlays.
 import CONFIG from './config.js';
-import { drawHud, formatTime, winRank } from './hud.js';
+import { drawHud, drawPanel, formatTime, winRank } from './hud.js';
 import { shakeOffset } from './feel.js';
 
 const COLORS = {
   floor: '#1c1512', // charcoal-plum dark wings
+  floorAlt: '#201a15', // M11: second checker tone (near-identical)
   floorLine: '#2e2118',
+  roomLabel: 'rgba(245, 240, 230, 0.14)', // M11: dim floor room labels
   carpet: '#3a1f2b', // deep plum carpet (silent floor)
   carpetDot: '#4d2a38',
   wood: '#4a3423', // warm stage wood (noisy floor)
@@ -29,12 +31,16 @@ const COLORS = {
   guard: '#e8a33d',
   prop: '#ffd94d',
   propText: '#ffe9a8',
-  conePatrol: 'rgba(232, 179, 61, 0.16)', // tan — patrol (M8: diturunkan
-  // dari 0.25; dua cone patrol yang tumpang tindih kini 0.29 efektif,
-  // bukan 0.44 — massa kuning di stage terurai)
-  coneSuspicious: 'rgba(240, 200, 60, 0.30)', // kuning — suspicious (M8: 0.38)
-  coneChase: 'rgba(220, 60, 40, 0.36)', // merah — chase (M8: 0.42)
-  coneSearch: 'rgba(232, 130, 40, 0.22)', // oranye — search (M8: 0.30)
+  // M11: cone fill as rgb + M8 base alpha — the wedge is filled with a
+  // radial gradient (full alpha near the guard, fading to transparent
+  // at VIEW_DIST) so the far edge reads soft like top-10 cones. The
+  // M8 alphas are unchanged; only the falloff is new.
+  coneFill: {
+    patrol: { rgb: '232, 179, 61', a: 0.16 },
+    suspicious: { rgb: '240, 200, 60', a: 0.30 },
+    chase: { rgb: '220, 60, 40', a: 0.36 },
+    search: { rgb: '232, 130, 40', a: 0.22 },
+  },
   // M8: tepi tipis tiap cone — batas tiap cone tetap kebaca walau
   // fill-nya tumpang tindih (warna = state, alpha lebih kuat dari fill).
   coneEdgePatrol: 'rgba(232, 179, 61, 0.55)',
@@ -54,14 +60,16 @@ function drawCone(ctx, guard, t) {
   const half = (CONFIG.VIEW_HALF_ANGLE_DEG * Math.PI) / 180;
   const base = Math.atan2(guard.dir.y, guard.dir.x);
   // Cone colour follows the guard's FSM state (M2) — the state is
-  // readable at a glance, even on the judge's contact sheet.
-  const fillByState = {
-    patrol: COLORS.conePatrol,
-    suspicious: COLORS.coneSuspicious,
-    chase: COLORS.coneChase,
-    search: COLORS.coneSearch,
-  };
-  ctx.fillStyle = fillByState[guard.state] || COLORS.conePatrol;
+  // readable at a glance, even on the judge's contact sheet. M11: the
+  // fill is a radial gradient (full M8 alpha near the guard, fading to
+  // transparent at the far edge) instead of a flat alpha wedge.
+  const c = COLORS.coneFill[guard.state] || COLORS.coneFill.patrol;
+  const grad = ctx.createRadialGradient(
+    guard.x, guard.y, 10, guard.x, guard.y, CONFIG.VIEW_DIST);
+  grad.addColorStop(0, `rgba(${c.rgb}, ${c.a})`);
+  grad.addColorStop(0.75, `rgba(${c.rgb}, ${c.a})`);
+  grad.addColorStop(1, `rgba(${c.rgb}, 0)`);
+  ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.moveTo(guard.x, guard.y);
   ctx.arc(guard.x, guard.y, CONFIG.VIEW_DIST, base - half, base + half);
@@ -189,38 +197,49 @@ function drawProps(ctx, world) {
   }
 }
 
-function drawOverlay(ctx, title, lines) {
-  ctx.fillStyle = COLORS.overlay;
-  ctx.fillRect(0, 0, CONFIG.VIEW_WIDTH, CONFIG.VIEW_HEIGHT);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = COLORS.hud;
-  ctx.font = 'bold 44px monospace';
-  ctx.fillText(title, CONFIG.VIEW_WIDTH / 2, 250);
-  ctx.font = '16px monospace';
-  ctx.fillStyle = COLORS.hudDim;
-  lines.forEach((line, i) => {
-    ctx.fillText(line, CONFIG.VIEW_WIDTH / 2, 300 + i * 28);
-  });
+// M11: room labels as floor landmarks (level-design: guide with light
+// and landmarks, not walls). X derived from cover geometry — curtain A
+// splits foyer/auditorium, the crate splits auditorium/backstage; Y
+// are hand-placed clear rows (below the top patrols, clear of pools,
+// prop labels and patrol-label rows — and below the HUD header panel,
+// which covers y8..92: FOYER sits at y130, not y72, after the first
+// screenshot pass caught it hidden under the panel).
+export function roomLabels(level) {
+  const curtainA = level.covers.find((c) => c.kind === 'curtain');
+  const crate = level.covers.find((c) => c.kind === 'crate');
+  const foyerX = Math.round((CONFIG.WALL + curtainA.x) / 2);
+  const audX = Math.round((curtainA.x + curtainA.w + crate.x) / 2);
+  const backX = Math.round((crate.x + crate.w + (CONFIG.VIEW_WIDTH - CONFIG.WALL)) / 2);
+  return [
+    { text: 'FOYER', x: foyerX, y: 130 },
+    { text: 'AUDITORIUM', x: audX, y: 205 },
+    { text: 'BACKSTAGE', x: backX, y: 160 },
+  ];
 }
 
-export function render(ctx, world, screen, t = 0, muted = false) {
+// M11: the static floor — checkerboard, carpet, wood stage, light
+// pools, room labels. Drawn once into the offscreen layer (see
+// getFloorLayer) and drawn directly when there is no document (node
+// tests / dossier build). Geometry identical to the M1–M10 floor.
+function drawFloor(ctx, level) {
   const W = CONFIG.VIEW_WIDTH;
   const H = CONFIG.VIEW_HEIGHT;
-  const level = world.level;
-  // M4 feel: trauma shake moves the whole frame (visual only — the
-  // simulation never moves). It decays in real time via feel.update.
-  const off = shakeOffset(world.feel);
-  ctx.save();
-  ctx.translate(off.x, off.y);
-  // Floor: dark charcoal-plum wings + faint board lines.
-  ctx.fillStyle = COLORS.floor;
-  ctx.fillRect(0, 0, W, H);
+  const T = CONFIG.TILE;
+  // Checkerboard (create-game-assets: tileable surface, two
+  // near-identical dark tones) — replaces the flat M1 fill.
+  for (let ty = 0; ty < H / T; ty++) {
+    for (let tx = 0; tx < W / T; tx++) {
+      ctx.fillStyle = (tx + ty) % 2 === 0 ? COLORS.floor : COLORS.floorAlt;
+      ctx.fillRect(tx * T, ty * T, T, T);
+    }
+  }
+  // Faint board lines (M1, kept over the checker).
   ctx.strokeStyle = COLORS.floorLine;
   ctx.lineWidth = 1;
-  for (let x = CONFIG.TILE; x < W; x += CONFIG.TILE) {
+  for (let x = T; x < W; x += T) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
-  for (let y = CONFIG.TILE; y < H; y += CONFIG.TILE) {
+  for (let y = T; y < H; y += T) {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   }
   // Carpet zones (silent floor): plum fill + dot pattern.
@@ -241,7 +260,8 @@ export function render(ctx, world, screen, t = 0, muted = false) {
   for (let y = stage.y + 14; y < stage.y + stage.h; y += 14) {
     ctx.beginPath(); ctx.moveTo(stage.x, y); ctx.lineTo(stage.x + stage.w, y); ctx.stroke();
   }
-  // Light pools: warm glow so "light = danger" reads at a glance.
+  // Light pools: warm radial glow so "light = danger" reads at a
+  // glance (M3 geometry, now baked into the static layer).
   for (const pool of level.lightPools) {
     const cx = pool.x + pool.w / 2;
     const cy = pool.y + pool.h / 2;
@@ -253,6 +273,60 @@ export function render(ctx, world, screen, t = 0, muted = false) {
     ctx.fillRect(pool.x - 20, pool.y - 20, pool.w + 40, pool.h + 40);
     drawRect(ctx, pool, COLORS.poolTint);
   }
+  // Room labels, dim on the floor.
+  ctx.fillStyle = COLORS.roomLabel;
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'center';
+  for (const l of roomLabels(level)) ctx.fillText(l.text, l.x, l.y);
+}
+
+// M11: the floor never changes during a run — pre-render it once to
+// an offscreen canvas (game-feel: cache static gradients, no per-frame
+// allocation). Null when there is no document (node tests / dossier).
+let floorLayer = null;
+function getFloorLayer(level) {
+  if (floorLayer) return floorLayer;
+  if (typeof document === 'undefined' || !document.createElement) return null;
+  const c = document.createElement('canvas');
+  c.width = CONFIG.VIEW_WIDTH;
+  c.height = CONFIG.VIEW_HEIGHT;
+  drawFloor(c.getContext('2d'), level);
+  floorLayer = c;
+  return floorLayer;
+}
+
+function drawOverlay(ctx, title, lines) {
+  ctx.fillStyle = COLORS.overlay;
+  ctx.fillRect(0, 0, CONFIG.VIEW_WIDTH, CONFIG.VIEW_HEIGHT);
+  // M11: framed panel behind the text (same treatment as the HUD) —
+  // gold border for the big moment. Height grows with the line count.
+  const panelH = 130 + lines.length * 28;
+  drawPanel(ctx, CONFIG.VIEW_WIDTH / 2 - 330, 190, 660, panelH, 'rgba(232, 179, 61, 0.45)');
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLORS.hud;
+  ctx.font = 'bold 44px monospace';
+  ctx.fillText(title, CONFIG.VIEW_WIDTH / 2, 250);
+  ctx.font = '16px monospace';
+  ctx.fillStyle = COLORS.hudDim;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, CONFIG.VIEW_WIDTH / 2, 300 + i * 28);
+  });
+}
+
+export function render(ctx, world, screen, t = 0, muted = false) {
+  const W = CONFIG.VIEW_WIDTH;
+  const H = CONFIG.VIEW_HEIGHT;
+  const level = world.level;
+  // M4 feel: trauma shake moves the whole frame (visual only — the
+  // simulation never moves). It decays in real time via feel.update.
+  const off = shakeOffset(world.feel);
+  ctx.save();
+  ctx.translate(off.x, off.y);
+  // M11: static floor from the cached layer (baked once); direct draw
+  // when there is no document (node tests / dossier build).
+  const layer = getFloorLayer(level);
+  if (layer) ctx.drawImage(layer, 0, 0);
+  else drawFloor(ctx, level);
 
   for (const guard of world.guards) drawPatrolRoute(ctx, guard);
   for (const guard of world.guards) drawCone(ctx, guard, t);
@@ -263,9 +337,52 @@ export function render(ctx, world, screen, t = 0, muted = false) {
     const isCrate = cover.kind === 'crate';
     drawRect(ctx, cover, isCrate ? COLORS.crate : COLORS.curtain,
       isCrate ? COLORS.crateEdge : COLORS.curtainEdge);
+    if (isCrate) {
+      // M11: crate X + bevel — the box reads as a box at a glance.
+      ctx.strokeStyle = COLORS.crateEdge;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cover.x + 4, cover.y + 4);
+      ctx.lineTo(cover.x + cover.w - 4, cover.y + cover.h - 4);
+      ctx.moveTo(cover.x + cover.w - 4, cover.y + 4);
+      ctx.lineTo(cover.x + 4, cover.y + cover.h - 4);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 220, 160, 0.35)';
+      ctx.beginPath();
+      ctx.moveTo(cover.x + 2, cover.y + cover.h - 2);
+      ctx.lineTo(cover.x + 2, cover.y + 2);
+      ctx.lineTo(cover.x + cover.w - 2, cover.y + 2);
+      ctx.stroke();
+    } else {
+      // M11: curtain folds — vertical pleat lines, so velvet reads as
+      // fabric, not a flat red slab.
+      ctx.strokeStyle = 'rgba(60, 8, 16, 0.45)';
+      ctx.lineWidth = 2;
+      for (const fx of [0.25, 0.5, 0.75]) {
+        const lx = cover.x + cover.w * fx;
+        ctx.beginPath();
+        ctx.moveTo(lx, cover.y + 3);
+        ctx.lineTo(lx, cover.y + cover.h - 3);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(255, 120, 140, 0.25)';
+      ctx.beginPath();
+      ctx.moveTo(cover.x + cover.w * 0.12, cover.y + 3);
+      ctx.lineTo(cover.x + cover.w * 0.12, cover.y + cover.h - 3);
+      ctx.stroke();
+    }
   }
 
-  // Exit: green stage door.
+  // Exit: green stage door + soft glow halo (M11) so the goal reads
+  // from anywhere on the map.
+  const ex = world.exit;
+  const ecx = ex.x + ex.w / 2;
+  const ecy = ex.y + ex.h / 2;
+  const egrad = ctx.createRadialGradient(ecx, ecy, 6, ecx, ecy, 80);
+  egrad.addColorStop(0, 'rgba(46, 125, 50, 0.30)');
+  egrad.addColorStop(1, 'rgba(46, 125, 50, 0)');
+  ctx.fillStyle = egrad;
+  ctx.fillRect(ex.x - 50, ex.y - 50, ex.w + 100, ex.h + 100);
   drawRect(ctx, world.exit, COLORS.exit, COLORS.exitText);
   ctx.fillStyle = COLORS.exitText;
   ctx.font = 'bold 13px monospace';
@@ -305,6 +422,16 @@ export function render(ctx, world, screen, t = 0, muted = false) {
     ctx.fillText('+1 PROP', CONFIG.VIEW_WIDTH / 2, 150);
     ctx.globalAlpha = 1;
   }
+
+  // M11: vignette — darkened playfield edges (top-10 lighting), drawn
+  // after entities so the frame feels lit, before the HUD so text
+  // stays at full contrast.
+  const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.68);
+  vg.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vg.addColorStop(0.72, 'rgba(0, 0, 0, 0)');
+  vg.addColorStop(1, 'rgba(0, 0, 0, 0.30)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
 
   if (screen === 'play' || screen === 'paused') drawHud(ctx, world, screen, t, muted);
   if (screen === 'start') {
