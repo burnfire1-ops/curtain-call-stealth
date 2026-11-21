@@ -29,10 +29,19 @@ const COLORS = {
   guard: '#e8a33d',
   prop: '#ffd94d',
   propText: '#ffe9a8',
-  conePatrol: 'rgba(232, 179, 61, 0.25)', // tan — patrol, belum curiga
-  coneSuspicious: 'rgba(240, 200, 60, 0.38)', // kuning — suspicious
-  coneChase: 'rgba(220, 60, 40, 0.42)', // merah — chase
-  coneSearch: 'rgba(232, 130, 40, 0.30)', // oranye — search (parent-approved)
+  conePatrol: 'rgba(232, 179, 61, 0.16)', // tan — patrol (M8: diturunkan
+  // dari 0.25; dua cone patrol yang tumpang tindih kini 0.29 efektif,
+  // bukan 0.44 — massa kuning di stage terurai)
+  coneSuspicious: 'rgba(240, 200, 60, 0.30)', // kuning — suspicious (M8: 0.38)
+  coneChase: 'rgba(220, 60, 40, 0.36)', // merah — chase (M8: 0.42)
+  coneSearch: 'rgba(232, 130, 40, 0.22)', // oranye — search (M8: 0.30)
+  // M8: tepi tipis tiap cone — batas tiap cone tetap kebaca walau
+  // fill-nya tumpang tindih (warna = state, alpha lebih kuat dari fill).
+  coneEdgePatrol: 'rgba(232, 179, 61, 0.55)',
+  coneEdgeSuspicious: 'rgba(240, 200, 60, 0.65)',
+  coneEdgeChase: 'rgba(255, 90, 60, 0.70)',
+  coneEdgeSearch: 'rgba(232, 130, 40, 0.60)',
+  guardHalo: 'rgba(10, 8, 6, 0.60)', // M8: halo gelap di belakang guard
   patrol: 'rgba(232, 179, 61, 0.55)',
   ring: 'rgba(232, 179, 61, 0.55)',
   noiseRing: 'rgba(245, 240, 230, 0.35)',
@@ -58,6 +67,22 @@ function drawCone(ctx, guard, t) {
   ctx.arc(guard.x, guard.y, CONFIG.VIEW_DIST, base - half, base + half);
   ctx.closePath();
   ctx.fill();
+  // M8: tepi tipis di SELURUH wedge (arc + dua sisi radial) — tiap cone
+  // tetap punya batas sendiri walau fill-nya tumpang tindih dengan cone
+  // lain. Chase tetap dapat blink 3px di atasnya (M4, dipertahankan).
+  const edgeByState = {
+    patrol: COLORS.coneEdgePatrol,
+    suspicious: COLORS.coneEdgeSuspicious,
+    chase: COLORS.coneEdgeChase,
+    search: COLORS.coneEdgeSearch,
+  };
+  ctx.strokeStyle = edgeByState[guard.state] || COLORS.coneEdgePatrol;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(guard.x, guard.y);
+  ctx.arc(guard.x, guard.y, CONFIG.VIEW_DIST, base - half, base + half);
+  ctx.closePath();
+  ctx.stroke();
   // M4 feel: the cone's edge blinks while the guard chases — the alert
   // reads from the cone alone, not just from the guard's colour.
   if (guard.state === 'chase') {
@@ -251,6 +276,9 @@ export function render(ctx, world, screen, t = 0, muted = false) {
   drawRings(ctx, world);
 
   for (const guard of world.guards) {
+    // M8: halo gelap di belakang guard — badan oranye tetap kebaca di
+    // dalam cone-nya sendiri maupun di tumpang tindih cone lain.
+    drawCircle(ctx, guard.x, guard.y, guard.r + 4, COLORS.guardHalo);
     drawPerson(ctx, guard, COLORS.guard, `${guard.name} · ${guard.state.toUpperCase()}`);
     // M4 feel: "!" above the guard for the first beat of a chase, so
     // the Suspicious -> Chase transition reads even without the cone.

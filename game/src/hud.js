@@ -39,6 +39,21 @@ export function propsSummary(props) {
   };
 }
 
+// M8: compressed guard list — only non-patrol guards are named; patrols
+// collapse into a count ("U3 CHASE · 5 PATROL", "6 PATROL" when all calm).
+// The alarming state is the signal; patrol is the default. The full
+// per-guard list still exists via guardStates() (tested, untouched).
+// Pure, unit-tested in tests/m8.test.js.
+export function guardStatesShort(states) {
+  const alerted = states.filter((g) => g.state !== 'patrol');
+  const patrolling = states.length - alerted.length;
+  const parts = alerted.map(
+    (g) => `${g.name.replace('USHER ', 'U')} ${g.state.toUpperCase()}`,
+  );
+  if (patrolling > 0) parts.push(`${patrolling} PATROL`);
+  return parts.join(' · ');
+}
+
 // One short line per usher: name + FSM state, in level order.
 export function guardStates(guards) {
   return guards.map((g) => ({ name: g.name, state: g.state }));
@@ -127,19 +142,18 @@ export function drawHud(ctx, world, screen, t, muted = false) {
   ctx.fillStyle = labelColor;
   ctx.fillText(label, mx + mw + 8, my + 9);
 
-  // Controls + full legend on one line (M3 layout, kept): shortened so
-  // it ends before the EXIT box (x>=860) — the M3 line plus "· M suara"
-  // ran into the box; "restart" -> "ulang" and a single " | " buy the
-  // ~120px the line was over. M is documented on the start screen.
+  // M8: short legend ONLY on the play HUD — no controls line (full
+  // controls live on the start screen) and no full LEGEND: the LEGEND
+  // constant is test-locked to all four rules (tests/m4.test.js) and
+  // the complete rules stay on the start screen. The dropped 4th rule
+  // (running on wood is noisy) is carried by the SUARA line + the
+  // player noise ring instead. One short row, ~270px.
   ctx.fillStyle = COLORS.hudDim;
   ctx.font = '12px monospace';
+  ctx.fillText('CAHAYA=bahaya · GELAP=aman · KARPET=senyap', 16, 68);
+  // Per-guard state list (M8 compressed) + props with names and checkmarks.
   ctx.fillText(
-    `WASD gerak · Shift lari · R ulang · P jeda | ${LEGEND}`,
-    16, 68,
-  );
-  // Per-guard state list + props with names and checkmarks.
-  ctx.fillText(
-    guardStates(world.guards).map((g) => `${g.name.replace('USHER ', 'U')} ${g.state.toUpperCase()}`).join(' · ')
+    guardStatesShort(guardStates(world.guards))
     + `   |   Props ${summary.taken}/${summary.total} `
     + summary.items.map((i) => `${i.taken ? '✓' : '○'} ${i.name}`).join(' '),
     16, 84,
