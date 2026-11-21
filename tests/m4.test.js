@@ -110,10 +110,22 @@ test('hud: lastNoiseText is silent before any run, then names floor + radius', (
 
 // --- screens.js: transitions ---
 
-test('screens: start + Enter -> play, other keys stay on start', () => {
-  assert.deepEqual(transition('start', 'Enter'), { screen: 'play' });
-  assert.deepEqual(transition('start', 'KeyR'), { screen: 'start' });
-  assert.deepEqual(transition('start', 'KeyP'), { screen: 'start' });
+// M14: the opener is the job-select screen (the old start screen is
+// gone — its rules live in the HOW TO PLAY panel). Digit1/2 pick a
+// card; Enter starts the selected job; a locked Job 2 does nothing.
+test('screens: select + 1/2/Enter picks and starts a job, a locked Job 2 does nothing', () => {
+  assert.deepEqual(transition('select', 'Digit1'), { screen: 'select', action: 'select', job: 0 });
+  assert.deepEqual(transition('select', 'Digit2', { cleared: [true, false] }),
+    { screen: 'select', action: 'select', job: 1 });
+  assert.deepEqual(transition('select', 'Digit2', { cleared: [false, false] }),
+    { screen: 'select' }, 'Job 2 is locked until Job 1 clears');
+  assert.deepEqual(transition('select', 'Enter', { selected: 0, cleared: [false, false] }),
+    { screen: 'play', action: 'startJob', job: 0 });
+  assert.deepEqual(transition('select', 'Enter', { selected: 1, cleared: [false, false] }),
+    { screen: 'select' }, 'Enter on a locked job does nothing');
+  assert.deepEqual(transition('select', 'Enter', { selected: 1, cleared: [true, false] }),
+    { screen: 'play', action: 'startJob', job: 1 });
+  assert.deepEqual(transition('select', 'KeyR'), { screen: 'select' });
 });
 
 test('screens: play + P pauses, paused + P resumes, P does nothing on win/lose', () => {
@@ -123,13 +135,18 @@ test('screens: play + P pauses, paused + P resumes, P does nothing on win/lose',
   assert.deepEqual(transition('lose', 'KeyP'), { screen: 'lose' });
 });
 
-test('screens: R restarts from play, paused, win and lose; Enter restarts from win/lose', () => {
+test('screens: R restarts from play, paused, win and lose; Enter goes NEXT JOB / title / restart', () => {
   assert.deepEqual(transition('play', 'KeyR'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('paused', 'KeyR'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('win', 'KeyR'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('lose', 'KeyR'), { screen: 'play', action: 'restart' });
-  assert.deepEqual(transition('win', 'Enter'), { screen: 'play', action: 'restart' });
+  // M14: Enter on a Job 1 win goes straight to Job 2 (NEXT JOB); on a
+  // Job 2 win it goes back to the title; on a loss it restarts the job.
+  assert.deepEqual(transition('win', 'Enter'), { screen: 'play', action: 'next' });
+  assert.deepEqual(transition('win', 'Enter', { jobIndex: 0 }), { screen: 'play', action: 'next' });
+  assert.deepEqual(transition('win', 'Enter', { jobIndex: 1 }), { screen: 'select', action: 'title' });
   assert.deepEqual(transition('lose', 'Enter'), { screen: 'play', action: 'restart' });
+  assert.deepEqual(transition('lose', 'Enter', { jobIndex: 1 }), { screen: 'play', action: 'restart' });
   // Enter on play/paused is not a restart (movement keys only).
   assert.deepEqual(transition('play', 'Enter'), { screen: 'play' });
 });

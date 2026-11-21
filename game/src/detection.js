@@ -12,9 +12,10 @@ export { levelLightAt as lightAt };
 
 // Noise radius of a running player at (x, y): wood is loud, carpet is
 // quiet, walking is silent. Guards inside the radius hear the noise.
-export function noiseRadiusAt(x, y, running) {
+// M14: `level` is the active job's level (default Job 1).
+export function noiseRadiusAt(x, y, running, level) {
   if (!running) return 0;
-  return floorAt(x, y) === 'carpet'
+  return floorAt(x, y, level) === 'carpet'
     ? CONFIG.NOISE_RUN_CARPET
     : CONFIG.NOISE_RUN_WOOD;
 }
@@ -31,10 +32,11 @@ export function fillRate(dist, running, light) {
   );
 }
 
-// ctx: { dist, running, x, y } — player position feeds lightAt (M3).
+// ctx: { dist, running, x, y, level? } — player position feeds lightAt
+// (M3); `level` is the active job's level (M14, default Job 1).
 export function updateSuspicion(suspicion, seen, ctx, dt) {
   if (seen) {
-    const rate = fillRate(ctx.dist, ctx.running, levelLightAt(ctx.x, ctx.y));
+    const rate = fillRate(ctx.dist, ctx.running, levelLightAt(ctx.x, ctx.y, ctx.level));
     return Math.min(1, suspicion + rate * dt);
   }
   return Math.max(0, suspicion - CONFIG.SUSPICION_DECAY * dt);

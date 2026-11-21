@@ -6,7 +6,13 @@
 // wood stage, walls, curtain covers, props, patrol routes, cones, guards,
 // player, rings, HUD, overlays.
 import CONFIG from './config.js';
-import { drawHud, drawPanel, formatTime, winRank, scoreBreakdown, labelInsideHud } from './hud.js';
+import { LEVELS } from './level.js';
+import {
+  drawHud, drawPanel,
+  overlayPanelRect, labelOccluders, textBox, labelOccluded,
+  selectLayout, selectHowtoLines, selectCardLines, jobStatus,
+  campaignTotal, winScreenLines, loseScreenLines, PANEL_TEXT_MARGIN,
+} from './hud.js';
 import { shakeOffset } from './feel.js';
 
 const COLORS = {
@@ -152,22 +158,25 @@ function drawCameraCone(ctx, cam) {
 // dot in the facing direction, labelled like a guard. (CAM 1 sits at
 // (520,60), under the HUD header panel y8..92, so its mount is hidden
 // in play and its label is skipped — the cone below the panel is what
-// shows. CAM 2's mount + label are fully visible.)
-function drawCameraMount(ctx, cam) {
+// shows. CAM 2's label is skipped in play too — LASER 1 crosses its
+// text (user rule 06:22 WIB); the mount + teal cone + legend roster
+// carry the camera instead.)
+// M14: the label is skipped when its TEXT BOX touches any occluder
+// (HUD panel, minimap, overlay panel, or a laser beam) — see
+// hud.js labelOccluders (user rule 06:22 WIB). `occluders` defaults
+// to [] (label always drawn) for old callers.
+function drawCameraMount(ctx, cam, occluders = []) {
   drawRect(ctx, { x: cam.x - 8, y: cam.y - 5, w: 16, h: 10 },
     COLORS.camMount, COLORS.camMountEdge);
   ctx.fillStyle = COLORS.camMountEdge;
   ctx.beginPath();
   ctx.arc(cam.x + cam.dir.x * 10, cam.y + cam.dir.y * 10, 2.5, 0, Math.PI * 2);
   ctx.fill();
-  // HUD-fix: the label is skipped when the mount sits under ANY HUD
-  // panel (M12 pattern, generalised from the header alone via
-  // labelInsideHud). CAM 1 at (520,60) sits under the header; the
-  // cone below the panel + the roster line carry the camera.
-  if (!labelInsideHud(cam.x, cam.y)) {
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  const box = textBox(cam.name, cam.x, cam.y - 12, measureLabel(ctx, cam.name));
+  if (!labelOccluded(box, occluders)) {
     ctx.fillStyle = COLORS.hudDim;
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'center';
     ctx.fillText(cam.name, cam.x, cam.y - 12);
   }
 }
@@ -206,7 +215,7 @@ function drawCircle(ctx, x, y, r, fill, stroke) {
   }
 }
 
-function drawPerson(ctx, body, fill, label) {
+function drawPerson(ctx, body, fill, label, occluders = []) {
   drawCircle(ctx, body.x, body.y, body.r, fill, '#1a140f');
   // Facing tick.
   ctx.strokeStyle = '#1a140f';
@@ -215,16 +224,34 @@ function drawPerson(ctx, body, fill, label) {
   ctx.moveTo(body.x, body.y);
   ctx.lineTo(body.x + body.dir.x * (body.r + 6), body.y + body.dir.y * (body.r + 6));
   ctx.stroke();
-  // HUD-fix: a guard label whose anchor falls inside any HUD panel
-  // (USHER 6's strip, y60, sits under the header) is skipped — it
-  // would print through the translucent panel or sit half-clipped
-  // on the panel edge. The roster line carries the guard instead.
-  if (label && !labelInsideHud(body.x, body.y - body.r - 6)) {
-    ctx.fillStyle = COLORS.hudDim;
+  // M14: a guard label is skipped when its TEXT BOX touches any
+  // occluder (HUD panel, minimap, overlay panel, or a laser beam) —
+  // the anchor-only check let a label sit half-clipped on a panel
+  // edge (user rule 06:22 WIB). The roster line carries the guard.
+  if (label) {
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(label, body.x, body.y - body.r - 6);
+    const box = textBox(label, body.x, body.y - body.r - 6,
+      measureLabel(ctx, label));
+    if (!labelOccluded(box, occluders)) {
+      ctx.fillStyle = COLORS.hudDim;
+      ctx.fillText(label, body.x, body.y - body.r - 6);
+    }
   }
+}
+
+// M14: measure a label for the box check — width + ascent + descent
+// from ctx.measureText, falling back to the font size when a canvas
+// does not report the bounding boxes (node mocks, older canvases).
+function measureLabel(ctx, text) {
+  const m = ctx.measureText(text);
+  const size = parseInt((/(\d+)px/.exec(ctx.font || '') || [0, 11])[1], 10);
+  return {
+    width: m.width,
+    ascent: m.actualBoundingBoxAscent !== undefined ? m.actualBoundingBoxAscent : size,
+    descent: m.actualBoundingBoxDescent !== undefined
+      ? m.actualBoundingBoxDescent : Math.ceil(size * 0.25),
+  };
 }
 
 // Footstep rings (M3, visual only): thin gold circles that expand and
@@ -362,7 +389,7 @@ function drawLaser(ctx, laser) {
   }
 }
 
-function drawProps(ctx, world) {
+function drawProps(ctx, world, occluders = []) {
   for (const prop of world.props) {
     if (prop.taken) continue;
     // Gold diamond + short label.
@@ -377,11 +404,13 @@ function drawProps(ctx, world) {
     ctx.fillStyle = COLORS.propText;
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    // HUD-fix: skip the prop label when its anchor falls inside a
-    // HUD panel (the Violin label sits under the minimap) — the
-    // minimap's gold diamond marks the prop instead.
-    if (!labelInsideHud(prop.x, prop.y + 22)) {
-      ctx.fillText(prop.name.toUpperCase(), prop.x, prop.y + 22);
+    // M14: the label is skipped when its TEXT BOX touches any occluder
+    // (the Violin label sat under the minimap; the box rule catches
+    // the same case on every screen, not only in play).
+    const label = prop.name.toUpperCase();
+    const box = textBox(label, prop.x, prop.y + 22, measureLabel(ctx, label));
+    if (!labelOccluded(box, occluders)) {
+      ctx.fillText(label, prop.x, prop.y + 22);
     }
   }
 }
@@ -394,6 +423,9 @@ function drawProps(ctx, world) {
 // which covers y8..92: FOYER sits at y130, not y72, after the first
 // screenshot pass caught it hidden under the panel).
 export function roomLabels(level) {
+  // M14: a level may hand-place its labels (Job 2); Job 1 keeps the
+  // geometric derivation (unchanged).
+  if (level.roomLabels) return level.roomLabels;
   const curtainA = level.covers.find((c) => c.kind === 'curtain');
   const crate = level.covers.find((c) => c.kind === 'crate');
   const foyerX = Math.round((CONFIG.WALL + curtainA.x) / 2);
@@ -472,9 +504,14 @@ function drawFloor(ctx, level) {
 // M11: the floor never changes during a run — pre-render it once to
 // an offscreen canvas (game-feel: cache static gradients, no per-frame
 // allocation). Null when there is no document (node tests / dossier).
+// M14: the cache is keyed by LEVEL — the campaign switches levels, and
+// the old single-slot cache would have kept Job 1's floor under Job 2.
 let floorLayer = null;
+let floorLayerLevel = null;
 function getFloorLayer(level) {
-  if (floorLayer) return floorLayer;
+  if (floorLayer && floorLayerLevel === level) return floorLayer;
+  floorLayerLevel = level;
+  floorLayer = null;
   if (typeof document === 'undefined' || !document.createElement) return null;
   const c = document.createElement('canvas');
   c.width = CONFIG.VIEW_WIDTH;
@@ -484,28 +521,155 @@ function getFloorLayer(level) {
   return floorLayer;
 }
 
-function drawOverlay(ctx, title, lines) {
+function drawOverlay(ctx, title, body, footer) {
   ctx.fillStyle = COLORS.overlay;
   ctx.fillRect(0, 0, CONFIG.VIEW_WIDTH, CONFIG.VIEW_HEIGHT);
   // M11: framed panel behind the text (same treatment as the HUD) —
-  // gold border for the big moment. Height grows with the line count.
-  const panelH = 130 + lines.length * 28;
-  drawPanel(ctx, CONFIG.VIEW_WIDTH / 2 - 330, 190, 660, panelH, 'rgba(232, 179, 61, 0.45)');
+  // gold border for the big moment. Height grows with the row count.
+  // M14: the rect comes from hud.js overlayPanelRect — the same rect
+  // the label-box check uses, so the two can never drift apart.
+  const rows = body.length + (footer ? 1 : 0);
+  const panel = overlayPanelRect(rows);
+  drawPanel(ctx, panel.x, panel.y, panel.w, panel.h, 'rgba(232, 179, 61, 0.45)');
+  ctx.fillStyle = COLORS.hud;
+  ctx.font = 'bold 44px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(title, CONFIG.VIEW_WIDTH / 2, 250);
+  // M14: the body is LEFT-aligned on one fixed margin (panel.x + 40)
+  // — one straight left edge (user rule 06:25 WIB: the old centred
+  // block had no straight edge, long lines nearly touched the panel
+  // sides, and a sentence broke into a lowercase continuation). The
+  // title and the closer stay centred.
+  ctx.font = '16px monospace';
+  ctx.fillStyle = COLORS.hudDim;
+  ctx.textAlign = 'left';
+  body.forEach((line, i) => {
+    ctx.fillText(line, panel.x + PANEL_TEXT_MARGIN, 300 + i * 28);
+  });
+  if (footer) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = COLORS.hud;
+    ctx.fillText(footer, CONFIG.VIEW_WIDTH / 2, 300 + body.length * 28 + 8);
+  }
+}
+
+// M14: the job-select screen — the opener, replacing the old start
+// screen. The backdrop world is ambience (dimmed); the cards carry
+// the content. Title + tagline centred; the two job cards + the HOW
+// TO PLAY panel on one grid; the howto body left-aligned on one fixed
+// margin (panel.x + 40, the same straight-edge rule as the overlays);
+// the closer + campaign best centred below. `campaign` is main.js's
+// live campaign (or a shot fixture); `world` is the backdrop world
+// (the selected job's level).
+function drawSelectScreen(ctx, campaign, world) {
+  const L = selectLayout();
+  ctx.fillStyle = COLORS.overlay;
+  ctx.fillRect(0, 0, CONFIG.VIEW_WIDTH, CONFIG.VIEW_HEIGHT);
+  // Title + tagline, centred (the judul stays centred — rule 06:25 (a)).
   ctx.textAlign = 'center';
   ctx.fillStyle = COLORS.hud;
   ctx.font = 'bold 44px monospace';
-  ctx.fillText(title, CONFIG.VIEW_WIDTH / 2, 250);
+  ctx.fillText('CURTAIN CALL', CONFIG.VIEW_WIDTH / 2, L.titleY);
   ctx.font = '16px monospace';
   ctx.fillStyle = COLORS.hudDim;
+  ctx.fillText('Steal back the props. Leave no witness.', CONFIG.VIEW_WIDTH / 2, L.taglineY);
+  // Job cards: gold border on the selected one; status colours carry
+  // the state (cleared = gold, locked = red, open = dim) alongside
+  // the words, never colour alone.
+  for (let i = 0; i < L.cards.length; i++) {
+    const c = L.cards[i];
+    const status = jobStatus(campaign, i);
+    const selected = campaign.selected === i;
+    drawPanel(ctx, c.x, c.y, c.w, c.h,
+      selected ? 'rgba(232, 179, 61, 0.9)' : undefined);
+    const lines = selectCardLines(LEVELS[i], campaign, i);
+    const statusColor = status === 'cleared' ? '#ffd94d'
+      : status === 'locked' ? '#ff6b57' : COLORS.hudDim;
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = selected ? COLORS.hud : COLORS.hudDim;
+    ctx.fillText(lines[0], c.x + 16, c.y + 28);
+    ctx.font = '12px monospace';
+    ctx.fillStyle = COLORS.hudDim;
+    ctx.fillText(lines[1], c.x + 16, c.y + 54);
+    ctx.fillStyle = statusColor;
+    ctx.fillText(lines[2], c.x + 16, c.y + 80);
+    if (lines[3]) {
+      ctx.fillStyle = COLORS.hudDim;
+      ctx.fillText(lines[3], c.x + 16, c.y + 106);
+    }
+  }
+  // HOW TO PLAY panel: section header bold, body left-aligned on one
+  // fixed margin — one straight left edge, blank lines between the
+  // groups (objective / legend+mechanics / controls).
+  const h = L.howto;
+  drawPanel(ctx, h.x, h.y, h.w, h.h);
+  const lines = selectHowtoLines();
+  ctx.textAlign = 'left';
   lines.forEach((line, i) => {
-    ctx.fillText(line, CONFIG.VIEW_WIDTH / 2, 300 + i * 28);
+    if (!line) return;
+    ctx.font = i === 0 ? 'bold 13px monospace' : '13px monospace';
+    ctx.fillStyle = i === 0 ? COLORS.hud : COLORS.hudDim;
+    ctx.fillText(line, L.howtoX, L.howtoFirstBaseline + i * L.howtoPitch);
   });
+  // Closer + campaign best, centred below the panel.
+  ctx.textAlign = 'center';
+  ctx.font = '16px monospace';
+  ctx.fillStyle = COLORS.hud;
+  ctx.fillText('CLICK A JOB CARD OR PRESS 1–2 · ENTER TO START',
+    CONFIG.VIEW_WIDTH / 2, L.footerY);
+  ctx.font = '14px monospace';
+  ctx.fillStyle = COLORS.hudDim;
+  ctx.fillText(`CAMPAIGN BEST ${campaignTotal(campaign.best)}`,
+    CONFIG.VIEW_WIDTH / 2, L.bestY);
 }
 
-export function render(ctx, world, screen, t = 0, muted = false) {
+export function render(ctx, world, screen, t = 0, muted = false, campaign = null) {
   const W = CONFIG.VIEW_WIDTH;
   const H = CONFIG.VIEW_HEIGHT;
   const level = world.level;
+  // M14: the campaign (default = a fresh session) and the overlay
+  // lines are computed BEFORE the world is drawn — the world labels
+  // must be checked against the panels that will cover them, and the
+  // panels are drawn after the world. The occluder list depends on
+  // the screen: play/paused get the HUD panels + minimap, select gets
+  // the select panels (cards + howto), win/lose get the overlay panel
+  // (row count from that screen's lines). Every screen adds the laser
+  // beams — a beam crossing a label is the CAM 2 defect (06:22 WIB).
+  const camp = campaign || { selected: 0, cleared: [false, false], best: [null, null] };
+  const winLines = screen === 'win' ? winScreenLines(world, camp) : null;
+  const loseLines = screen === 'lose' ? loseScreenLines(world) : null;
+  let occluders;
+  if (screen === 'play' || screen === 'paused') {
+    occluders = labelOccluders({ hud: true, lasers: world.lasers || [] });
+  } else if (screen === 'select') {
+    const L = selectLayout();
+    occluders = labelOccluders({ lasers: world.lasers || [] });
+    occluders.push(...L.cards, L.howto);
+    // The title + tagline are drawn text, not panels — their text
+    // zones are occluders too, or a backdrop label prints through them
+    // (CAM 1's label sat under "CURTAIN CALL"; the G3 label sat under
+    // the tagline). Measured with the same fonts drawSelectScreen uses,
+    // so the zones match the drawn text exactly.
+    ctx.font = 'bold 44px monospace';
+    occluders.push(textBox('CURTAIN CALL', W / 2, L.titleY,
+      measureLabel(ctx, 'CURTAIN CALL')));
+    ctx.font = '16px monospace';
+    occluders.push(textBox('Steal back the props. Leave no witness.', W / 2, L.taglineY,
+      measureLabel(ctx, 'Steal back the props. Leave no witness.')));
+  } else if (winLines) {
+    occluders = labelOccluders({
+      overlay: overlayPanelRect(winLines.body.length + 1),
+      lasers: world.lasers || [],
+    });
+  } else if (loseLines) {
+    occluders = labelOccluders({
+      overlay: overlayPanelRect(loseLines.body.length + 1),
+      lasers: world.lasers || [],
+    });
+  } else {
+    occluders = labelOccluders({ lasers: world.lasers || [] });
+  }
   // M4 feel: trauma shake moves the whole frame (visual only — the
   // simulation never moves). It decays in real time via feel.update.
   const off = shakeOffset(world.feel);
@@ -565,7 +729,7 @@ export function render(ctx, world, screen, t = 0, muted = false) {
 
   // M12: camera mounts (drawn after the covers, so the box sits on
   // the wall instead of under it).
-  for (const cam of world.cameras || []) drawCameraMount(ctx, cam);
+  for (const cam of world.cameras || []) drawCameraMount(ctx, cam, occluders);
 
   // M13: laser tripwires (drawn after the mounts, so the beams sit
   // on top of the floor and the emitters read as hardware).
@@ -587,14 +751,14 @@ export function render(ctx, world, screen, t = 0, muted = false) {
   ctx.textAlign = 'center';
   ctx.fillText('EXIT', world.exit.x + world.exit.w / 2, world.exit.y + world.exit.h / 2 + 5);
 
-  drawProps(ctx, world);
+  drawProps(ctx, world, occluders);
   drawRings(ctx, world);
 
   for (const guard of world.guards) {
     // M8: halo gelap di belakang guard — badan oranye tetap kebaca di
     // dalam cone-nya sendiri maupun di tumpang tindih cone lain.
     drawCircle(ctx, guard.x, guard.y, guard.r + 4, COLORS.guardHalo);
-    drawPerson(ctx, guard, COLORS.guard, `${guard.name} · ${guard.state.toUpperCase()}`);
+    drawPerson(ctx, guard, COLORS.guard, `${guard.name} · ${guard.state.toUpperCase()}`, occluders);
     // M4 feel: "!" above the guard for the first beat of a chase, so
     // the Suspicious -> Chase transition reads even without the cone.
     const alert = world.feel.alerts.find((a) => a.guard === guard);
@@ -644,40 +808,12 @@ export function render(ctx, world, screen, t = 0, muted = false) {
   ctx.fillRect(0, 0, W, H);
 
   if (screen === 'play' || screen === 'paused') drawHud(ctx, world, screen, t, muted);
-  if (screen === 'start') {
-    drawOverlay(ctx, 'CURTAIN CALL', [
-      'Steal back 3 props before the curtain rises.',
-      'Hide behind the red curtains. Stay out of the ushers’ yellow cones.',
-      'Grab the Tiara, Mask, Violin — then reach the EXIT. Props are optional:',
-      'the exit is always reachable without props.',
-      'Light = danger · Dark = safe · Carpet = silent',
-      'C throws a coin to distract guards · Cameras sweep teal cones — time them.',
-      'X throws smoke to block sight.',
-      'Lasers pulse — cross only when off.',
-      '',
-      'WASD move · Shift run · C throw coin · X throw smoke · P pause · M sound',
-      'Press ENTER or click to start',
-    ]);
-  } else if (screen === 'win') {
-    const taken = world.props.filter((p) => p.taken).length;
-    const rank = winRank(world.detections);
-    const s = scoreBreakdown(world);
-    drawOverlay(ctx, `${rank} — ESCAPED!`, [
-      `Time: ${formatTime(world.time)} · Props ${taken}/3 · Spotted ${world.detections}x`,
-      `Score: ${s.total} — Props ${s.props} + Ghost ${s.ghost} + Time ${s.time}`,
-      rank === 'GHOST'
-        ? 'Never seen at all — perfect.'
-        : 'You were spotted, but you still escaped.',
-      'Press R / Enter to play again',
-    ]);
-  } else if (screen === 'lose') {
-    const s = scoreBreakdown(world);
-    drawOverlay(ctx, 'CAUGHT!', [
-      `${world.caughtBy || 'An usher'} caught you.`,
-      'An usher saw you inside the cone for too long.',
-      `Score: ${s.total} — Props ${s.props} + Time ${s.time}`,
-      'Press R / Enter to try again',
-    ]);
+  if (screen === 'select') {
+    drawSelectScreen(ctx, camp, world);
+  } else if (winLines) {
+    drawOverlay(ctx, winLines.title, winLines.body, winLines.footer);
+  } else if (loseLines) {
+    drawOverlay(ctx, loseLines.title, loseLines.body, loseLines.footer);
   }
   ctx.restore();
 }

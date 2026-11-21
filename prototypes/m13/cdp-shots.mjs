@@ -1,12 +1,12 @@
-// M13 screenshot driver — pure Node (global WebSocket, no deps).
-// Takes the 4 SHIP screenshots into repo/screenshots/ via the frozen
-// ?shot= frames (deterministic, reproducible): 1-start (controls incl.
-// C throw coin), 2-play (coin ring + CAM 1 teal cone + USHER 2
-// investigating), 3-end (GHOST win), 4-alarm (ALARM! pill + teal
-// camera cone on the player + U1 chase). Also checks the M5
-// index.html fix: the page must fit EXACTLY in a 960x600 viewport
-// (scrollWidth/Height == 960/600, no scrollbar) and 0 console errors
-// on every shot.
+// M14 screenshot driver — the M13 driver with the shot list updated:
+// 1-select (job board: Job 1 CLEARED + best, Job 2 open + selected,
+// HOW TO PLAY), 2-play (Job 2 mid-game), 3-end (Job 2 GHOST win +
+// CAMPAIGN COMPLETE total), 4-alarm (Job 2 alarm). Pure Node (global
+// WebSocket, no deps). Takes the 4 SHIP screenshots into
+// repo/screenshots/ via the frozen ?shot= frames (deterministic,
+// reproducible). Also checks the M5 index.html fix: the page must fit
+// EXACTLY in a 960x600 viewport (scrollWidth/Height == 960/600, no
+// scrollbar) and 0 console errors on every shot.
 // Expects Chrome on --remote-debugging-port=9223 and game/ served on
 // 127.0.0.1:8124. Usage: node prototypes/m13/cdp-shots.mjs <outdir>
 import fs from 'node:fs';
@@ -69,22 +69,22 @@ await send('Emulation.setDeviceMetricsOverride', {
 });
 
 // Page-fit check (M5 index.html fix): no scrollbar at 960x600.
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=start' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=select' });
 await sleep(1200);
 const fit = await evalJs(`JSON.stringify({ sw: document.documentElement.scrollWidth, sh: document.documentElement.scrollHeight, iw: window.innerWidth, ih: window.innerHeight, canvas: document.getElementById('game').getBoundingClientRect().toJSON() })`);
 log.push('page fit (expect sw=960 sh=600): ' + fit);
-await shot('1-start.png');
+await shot('1-select.png');
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=play' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=play2' });
 await sleep(800);
 log.push('play state: ' + (await evalJs(`(() => { const w = window.__curtainCall; return w ? 'live-mode (unexpected)' : 'frozen shot frame'; })()`)));
 await shot('2-play.png');
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=end' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=end2' });
 await sleep(800);
 await shot('3-end.png');
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=chase' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=chase2' });
 await sleep(800);
 await shot('4-alarm.png');
 

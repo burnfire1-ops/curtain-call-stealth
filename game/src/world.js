@@ -5,7 +5,7 @@
 // vision.canSee feeds suspicion (detection.js) into each guard's FSM
 // (guard.js). Caught only when a chasing guard TOUCHES the player.
 import CONFIG from './config.js';
-import { buildLevel, floorAt } from './level.js';
+import { LEVELS, floorAt } from './level.js';
 import { canSee, segmentBlocked } from './vision.js';
 import { noiseRadiusAt } from './detection.js';
 import { createGuard, stepGuard, forceChase } from './guard.js';
@@ -21,8 +21,12 @@ import {
 export { segmentBlocked };
 
 // Level (level.js) + live state: 6 ushers, 3 props, rings, noise.
-export function createWorld() {
-  const level = buildLevel();
+// M14: `jobIndex` picks the campaign job (0 = THE MIDNIGHT THEATRE,
+// 1 = THE GALLERY AFTER DARK). The default keeps every old caller
+// (tests, shots, probes) on Job 1. Gadgets reset per job — a fresh
+// world is a fresh run (coins x3, smokes x2), nothing carries over.
+export function createWorld(jobIndex = 0) {
+  const level = LEVELS[jobIndex] || LEVELS[0];
   const guards = level.guards.map((spec) =>
     createGuard({ ...spec, speed: CONFIG.GUARD_SPEED }),
   );
@@ -30,6 +34,8 @@ export function createWorld() {
     time: 0,
     status: 'playing', // 'playing' | 'won' | 'lost'
     level,
+    jobIndex: LEVELS.indexOf(level), // 0 or 1 — the campaign job
+    jobName: level.name,
     // Alias of the WORST suspicion (0..1) for the HUD + old callers.
     exposure: 0,
     player: {
@@ -55,10 +61,10 @@ export function createWorld() {
     // M12: building alarm — raised when a camera's suspicion hits 1.0,
     // cleared after ALARM_CALM_S with no camera seeing the player.
     alarm: { active: false, unseen: 0 },
-    walls: level.walls,
-    covers: level.covers,
+    walls: level.walls.map((r) => ({ ...r })),
+    covers: level.covers.map((r) => ({ ...r })),
     props: level.props.map((p) => ({ ...p })),
-    exit: level.exit,
+    exit: { ...level.exit },
     rings: [], // footstep rings { x, y, age, kind: 'guard' }
     noiseRing: null, // { x, y, radius, age } while the player runs
     // M4: run stats for the HUD + win/lose screens, and the feel state
@@ -198,11 +204,11 @@ export function step(world, input, dt) {
   // walking is silent. Guards inside the radius hear the player's point.
   let noise = null;
   if (len > 0 && input.run) {
-    const radius = noiseRadiusAt(world.player.x, world.player.y, true);
+    const radius = noiseRadiusAt(world.player.x, world.player.y, true, world.level);
     noise = { x: world.player.x, y: world.player.y, radius };
     world.noiseRing = { ...noise, age: 0 };
     // M4: remember the last noise for the HUD (floor + radius).
-    world.lastNoise = { floor: floorAt(world.player.x, world.player.y), radius };
+    world.lastNoise = { floor: floorAt(world.player.x, world.player.y, world.level), radius };
   } else if (world.noiseRing) {
     world.noiseRing.age += dt;
     if (world.noiseRing.age > 0.25) world.noiseRing = null;
@@ -290,6 +296,7 @@ export function step(world, input, dt) {
     const dist = Math.hypot(world.player.x - cam.x, world.player.y - cam.y);
     stepCamera(cam, seen.seen, {
       dist, running: input.run, x: world.player.x, y: world.player.y,
+      level: world.level,
     }, dt);
     if (seen.seen) anyCamSees = true;
     if (cam.suspicion > worst) worst = cam.suspicion;
@@ -355,6 +362,7 @@ export function step(world, input, dt) {
       running: input.run,
       heard,
       blockers,
+      level: world.level,
     }, dt);
     // M4: a chase ENTRY is one detection (staying in chase does not
     // recount) — it fires the "!" alert + alarm sting via feel.

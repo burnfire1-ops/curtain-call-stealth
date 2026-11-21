@@ -28,7 +28,10 @@ export function worstSuspicion(guards) {
 // Props with names + taken flags, in level order; short names keep the
 // HUD line inside the 960px canvas (full names stay on the map labels).
 export function propsSummary(props) {
-  const short = { tiara: 'Tiara', mask: 'Mask', violin: 'Violin' };
+  const short = {
+    tiara: 'Tiara', mask: 'Mask', violin: 'Violin',
+    script: 'Script', baton: 'Baton', rose: 'Rose', // M14: Job 2 props
+  };
   return {
     taken: props.filter((p) => p.taken).length,
     total: props.length,
@@ -560,4 +563,245 @@ export function drawHud(ctx, world, screen, t, muted = false) {
     ctx.textAlign = 'center';
     ctx.fillText('PAUSED — press P to resume, R to restart', CONFIG.VIEW_WIDTH / 2, 170);
   }
+}
+
+// ---------------------------------------------------------------------------
+// M14 — campaign-lite (2 jobs) + the two user text rules of 22 Nov 06:22 /
+// 06:25 WIB. Pure data + pure helpers; render.js draws them, tests prove
+// them. No mechanic changes: win/lose rules and the per-job score
+// formula (prop x300 + GHOST +500 + time bonus) are exactly M13's.
+// ---------------------------------------------------------------------------
+
+// --- campaign state (in-memory per session, main.js owns the object) ---
+
+// Job status for the select cards: Job 1 is always open; a later job
+// opens only when the previous one is cleared (sequential unlock).
+export function jobStatus(campaign, i) {
+  if (campaign.cleared[i]) return 'cleared';
+  if (i === 0 || campaign.cleared[i - 1]) return 'open';
+  return 'locked';
+}
+
+export function canSelectJob(campaign, i) {
+  return jobStatus(campaign, i) !== 'locked';
+}
+
+// Campaign total = the sum of the per-job BEST scores (a null best
+// counts 0). The win screen shows this, not the run total.
+export function campaignTotal(best) {
+  return best.reduce((sum, b) => sum + (b ? b.score : 0), 0);
+}
+
+// A job's best only ever improves: a worse replay never lowers it.
+// The stored time rides with the best score (a tie keeps the earlier,
+// faster run — the caller passes the run time only on improvement).
+export function updateBest(best, score, time) {
+  if (!best || score > best.score) return { score, time };
+  return best;
+}
+
+// --- select screen (pure layout + content) ---
+
+// The select screen layout, as pure data — the single source of truth
+// for render.js AND the tests. One grid (x90..870): title + tagline
+// centred, two job cards, the HOW TO PLAY panel, the centred closer
+// + campaign best. Every text baseline sits >=10px from its panel
+// edge (the HUD-fix rule, applied to the new screen too).
+export function selectLayout() {
+  const cards = [
+    { x: 90, y: 108, w: 380, h: 128 },
+    { x: 490, y: 108, w: 380, h: 128 },
+  ];
+  const howto = { x: 90, y: 250, w: 780, h: 272 };
+  return {
+    titleY: 52,
+    taglineY: 84,
+    cards,
+    howto,
+    howtoX: howto.x + PANEL_TEXT_MARGIN,
+    howtoFirstBaseline: 274,
+    howtoPitch: 19,
+    footerY: 548,
+    bestY: 570,
+  };
+}
+
+// The four lines inside one job card: number + name, the sensor/prop
+// counts, the status, and the best (or the key hint). Left-aligned in
+// the card on a fixed margin — the same straight-edge rule as the
+// HOW TO PLAY panel (user 06:25 WIB).
+export function selectCardLines(level, campaign, index) {
+  const counts = `${level.guards.length} guards · ${level.cameras.length} cameras · ${level.lasers.length} lasers · ${level.props.length} props`;
+  const status = jobStatus(campaign, index);
+  const best = campaign.best[index];
+  const statusLine = status === 'cleared' ? 'CLEARED'
+    : status === 'locked' ? 'LOCKED — clear Job 1 to open' : 'NOT CLEARED';
+  const bestLine = status === 'cleared' && best
+    ? `BEST ${best.score} · ${formatTime(best.time)}`
+    : status === 'locked' ? '' : `PRESS ${index + 1}`;
+  return [
+    `${index + 1} · ${level.name}`,
+    counts,
+    statusLine,
+    bestLine,
+  ];
+}
+
+// The HOW TO PLAY body, as pure data — 13 rows: section header,
+// objective (4 short lines), blank, legend + one gadget/threat per
+// line (5), blank, controls (1). The prop sentence is the user's
+// rewrite (rule 06:25 (c)): a complete sentence ending at "EXIT.",
+// then a new line starting "Props are optional:" — never a lowercase
+// continuation. The names are generic ("the 3 props") because this
+// screen covers BOTH jobs, whose props differ; the per-job names
+// appear on the map labels and the job cards' counts.
+export function selectHowtoLines() {
+  return [
+    'HOW TO PLAY',
+    'Steal back the props before the curtain rises.',
+    'Grab the 3 props — then reach the EXIT.',
+    'Props are optional: the exit is always reachable without them.',
+    "Hide behind the red curtains. Stay out of the ushers' yellow cones.",
+    '',
+    'Light = danger · Dark = safe · Carpet = silent',
+    'C throws a coin to distract guards.',
+    'X throws smoke to block sight.',
+    'Cameras sweep teal cones — time them.',
+    'Lasers pulse — cross only when off.',
+    '',
+    'WASD move · Shift run · C coin · X smoke · P pause · M sound',
+  ];
+}
+
+// Click hit-test for the select cards: the card index, or -1.
+export function jobAtPoint(x, y, layout = selectLayout()) {
+  for (let i = 0; i < layout.cards.length; i++) {
+    const c = layout.cards[i];
+    if (x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h) return i;
+  }
+  return -1;
+}
+
+// --- panel text rules (user 06:25 WIB) ---
+
+// The title stays centred; the BODY is left-aligned on ONE fixed left
+// margin (panel.x + 40), so the block has one straight left edge. No
+// body line may be wider than the panel minus 80px (40px clear on
+// each side) — measured with measureText, enforced by tests, not by
+// eye. The closer ("Press ENTER..." / "NEXT JOB...") stays centred.
+export const PANEL_TEXT_MARGIN = 40;
+
+// `measure` is (text, fontSizePx) => width in px (the tests use the
+// 0.6em monospace advance; the real canvas uses ctx.measureText).
+export function panelTextFits(text, fontSize, panelW, measure) {
+  return measure(text, fontSize) <= panelW - PANEL_TEXT_MARGIN * 2;
+}
+
+// --- win / lose screen text (pure data) ---
+
+// The win screen: title centred, body left-aligned on panel.x + 40,
+// closer centred. Job 1 offers NEXT JOB (ENTER); Job 2 closes the
+// campaign with the total. The total is the sum of the per-job BESTS
+// (campaignTotal), so a worse replay never lowers it.
+export function winScreenLines(world, campaign) {
+  const taken = world.props.filter((p) => p.taken).length;
+  const s = scoreBreakdown(world);
+  const rank = winRank(world.detections);
+  const job = world.jobIndex || 0;
+  const total = campaignTotal(campaign.best);
+  const body = [
+    `JOB ${job + 1} · ${world.jobName || 'THE MIDNIGHT THEATRE'} — CLEARED`,
+    `Time: ${formatTime(world.time)} · Props ${taken}/${world.props.length} · Spotted ${world.detections}x`,
+    `Score: ${s.total} — Props ${s.props} + Ghost ${s.ghost} + Time ${s.time}`,
+    job === 0 ? `CAMPAIGN TOTAL ${total}` : `CAMPAIGN COMPLETE — TOTAL ${total}`,
+  ];
+  const footer = job === 0
+    ? 'NEXT JOB — PRESS ENTER · R TO REPLAY'
+    : 'PRESS ENTER — BACK TO TITLE · R TO REPLAY';
+  return { title: `${rank} — ESCAPED!`, body, footer };
+}
+
+// The lose screen: the M13 body lines, unchanged in meaning, now
+// left-aligned with a centred closer (same rule as the win screen).
+export function loseScreenLines(world) {
+  const s = scoreBreakdown(world);
+  const body = [
+    `${world.caughtBy || 'An usher'} caught you.`,
+    'An usher saw you inside the cone for too long.',
+    `Score: ${s.total} — Props ${s.props} + Time ${s.time}`,
+  ];
+  return { title: 'CAUGHT!', body, footer: 'PRESS R OR ENTER TO TRY AGAIN' };
+}
+
+// --- overlay panel rect (single source of truth) ---
+
+// The overlay panel rect — drawOverlay and the label-box check share
+// this, so a label can never be judged against a different rect than
+// the one actually drawn. (x150 y190 w660; height grows with the row
+// count, same as M11.)
+export function overlayPanelRect(rows) {
+  return { x: CONFIG.VIEW_WIDTH / 2 - 330, y: 190, w: 660, h: 130 + rows * 28 };
+}
+
+// --- label-box occlusion (user 06:22 WIB) ---
+
+// A world label is skipped when its TEXT BOX (measureText) touches ANY
+// panel — HUD panels, the minimap, or an overlay panel — NOT only when
+// its anchor point falls inside one. The anchor-only check (labelInsideHud,
+// kept for its tests) missed exactly the three defects the user found
+// on the start screen: USHER 1's label was cut in half under the overlay
+// because its anchor sat outside the panel while its text jutted under
+// the panel's left edge; USHER 4 sat on the panel's top border line;
+// and a laser beam crossed CAM 2's text. Laser beams count as occluders
+// too, as thickened line rects — the same box test, one occluder list.
+// `metrics` is ctx.measureText(text): { width, actualBoundingBoxAscent,
+// actualBoundingBoxDescent } (render.js falls back to the font size
+// when a canvas does not report the boxes).
+export function textBox(text, x, y, metrics, align = 'center') {
+  const left = align === 'center' ? x - metrics.width / 2
+    : align === 'right' ? x - metrics.width : x;
+  return {
+    x: left,
+    y: y - metrics.ascent,
+    w: metrics.width,
+    h: metrics.ascent + metrics.descent,
+  };
+}
+
+// Rect overlap with a small margin: a label that merely TOUCHES a panel
+// edge (2px) already reads as clipped, so it is skipped.
+export function rectsOverlap(a, b, margin = 2) {
+  return a.x - margin < b.x + b.w && a.x + a.w + margin > b.x
+    && a.y - margin < b.y + b.h && a.y + a.h + margin > b.y;
+}
+
+export function labelOccluded(box, occluders, margin = 2) {
+  return occluders.some((r) => rectsOverlap(box, r, margin));
+}
+
+// A laser beam as an occluder rect: the segment thickened by `pad` px
+// (the beam itself is 3px + a 7px glow, so 4px covers the visible line).
+export function laserOccluder(laser, pad = 4) {
+  const x = Math.min(laser.x1, laser.x2) - pad;
+  const y = Math.min(laser.y1, laser.y2) - pad;
+  const w = Math.abs(laser.x2 - laser.x1) + pad * 2;
+  const h = Math.abs(laser.y2 - laser.y1) + pad * 2;
+  return { x, y, w: Math.max(w, pad * 2), h: Math.max(h, pad * 2) };
+}
+
+// The occluder list for world labels on a given screen. The world is
+// drawn first and the panels on top, so render.js builds this BEFORE
+// drawing the world. `hud` adds the HUD panels + minimap (play/paused
+// only — the HUD is not drawn on the other screens); `overlay` is the
+// screen's overlay panel rect (select/win/lose); every screen adds the
+// laser beams.
+export function labelOccluders({ hud = false, overlay = null, lasers = [] } = {}) {
+  const out = [];
+  if (hud) {
+    const p = hudPanelRects();
+    out.push(p.header, p.bottom, minimapRect());
+  }
+  if (overlay) out.push(overlay);
+  for (const l of lasers) out.push(laserOccluder(l));
+  return out;
 }

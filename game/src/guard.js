@@ -130,11 +130,14 @@ export function stepGuard(guard, perception, dt) {
   guard.stateTime += dt;
 
   // Suspicion meter (detection.js) + last-known position update.
+  // M14: the perception carries the active job's level, so the light
+  // under the player is read from the right job's pools.
   guard.suspicion = updateSuspicion(guard.suspicion, perception.seen, {
     dist: perception.dist,
     running: perception.running,
     x: perception.player.x,
     y: perception.player.y,
+    level: perception.level,
   }, dt);
   if (perception.seen) {
     guard.lastKnown = { x: perception.player.x, y: perception.player.y };

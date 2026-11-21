@@ -175,7 +175,13 @@ class MockCtx {
   measureText(text) {
     const m = /(\d+)px/.exec(this.font || '12px monospace');
     const size = m ? parseInt(m[1], 10) : 12;
-    return { width: String(text).length * size * 0.6 };
+    // M14: the label-box check reads the bounding boxes, so the mock
+    // reports them like a real canvas (ascent = size, descent = 25%).
+    return {
+      width: String(text).length * size * 0.6,
+      actualBoundingBoxAscent: size,
+      actualBoundingBoxDescent: Math.ceil(size * 0.25),
+    };
   }
   createRadialGradient() {
     this._rec('createRadialGradient', []);
@@ -245,11 +251,15 @@ test('render hudfix: play frame — HUD rows at the new baselines, labels skippe
   assert.ok(rects.some((c) => c[2] === 572 && c[4] === 10), 'noise bar at y572');
   // Labels: USHER 6 (under the header) + CAM 1 (under the header) +
   // the Violin label (under the minimap) are skipped; the rest read.
+  // M14: CAM 2's label is skipped too — LASER 1 crosses its text
+  // (user rule 06:22 WIB: a label whose TEXT BOX touches a laser is
+  // skipped, even though its anchor is clear). The legend roster
+  // ('CAM 1 SPOTTED · CAM 2 SWEEP') still names the camera.
   assert.ok(!texts.some((t) => t.startsWith('USHER 6')), 'USHER 6 label skipped');
   assert.ok(!texts.includes('CAM 1'), 'CAM 1 label skipped');
+  assert.ok(!texts.includes('CAM 2'), 'CAM 2 label skipped — the laser crosses its text');
   assert.ok(!texts.includes("LEAD'S VIOLIN"), 'Violin label skipped under the minimap');
   assert.ok(texts.some((t) => t.startsWith('USHER 2')), 'USHER 2 label shown');
-  assert.ok(texts.includes('CAM 2'), 'CAM 2 label shown');
   assert.ok(texts.includes('STAR TIARA'), 'Tiara label shown');
   assert.ok(texts.includes('GOLDEN MASK'), 'Mask label shown');
   // The generic overflow rule over every text in the frame.
@@ -267,8 +277,10 @@ test('render hudfix: alarm frame — ALARM! pill + roster, no text overflows a p
   assertNoTextOverflowsPanel(ctx);
 });
 
-test('render hudfix: start + win frames — no text overflows a panel', () => {
-  for (const shot of ['start', 'end']) {
+test('render hudfix: select + win frames — no text overflows a panel', () => {
+  // M14: the old start screen is gone — the opener is the select
+  // screen now, so this test renders 'select' instead of 'start'.
+  for (const shot of ['select', 'end']) {
     const ctx = new MockCtx();
     const { world, screen } = applyShot(shot);
     render(ctx, world, screen, 0, false);

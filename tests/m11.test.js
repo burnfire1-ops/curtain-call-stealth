@@ -144,15 +144,8 @@ test('render M11: play frame draws panels, gradients, room labels', () => {
   assert.ok(texts.includes('CURTAIN CALL'), 'HUD title drawn');
 });
 
-test('render M11: start frame draws the overlay panel', () => {
-  const ctx = new MockCtx();
-  const { world, screen } = applyShot('start');
-  render(ctx, world, screen, 0, false);
-  const texts = textsOf(ctx);
-  assert.ok(texts.includes('CURTAIN CALL'), 'start title drawn');
-  assert.ok(texts.some((t) => t.includes('Steal back 3 props')), 'start line drawn');
-  // Overlay panel: a 660-wide rect centred (x=150) behind the text.
-  const rects = ctx.calls.filter((c) => c[0] === 'fillRect');
-  assert.ok(rects.some((c) => c[1] === 150 && c[3] === 660),
-    'overlay panel (x=150, w=660) drawn');
-});
+// M14: the start-frame test lived here ('render M11: start frame draws
+// the overlay panel') — the old start screen is gone, replaced by the
+// job-select screen. Its replacement is in tests/m14.test.js
+// ('m14 render: select frame draws the job cards + howto panel'), which
+// also covers the win overlay panel (x=150, w=660) via the end2 shot.
