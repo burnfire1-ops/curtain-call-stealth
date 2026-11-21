@@ -20,12 +20,12 @@ const IDLE = { x: 0, y: 0, run: false };
 
 // --- level.js: structure ---
 
-test('level: 3 wings, 5 ushers, 3 props, exit, spawn', () => {
+test('level: 3 wings, 6 ushers, 3 props, exit, spawn', () => {
   const level = buildLevel();
-  assert.equal(level.guards.length, 5);
+  assert.equal(level.guards.length, 6);
   assert.deepEqual(
     level.guards.map((g) => g.name),
-    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5'],
+    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5', 'USHER 6'],
   );
   assert.equal(level.props.length, 3);
   assert.deepEqual(level.props.map((p) => p.id), ['tiara', 'mask', 'violin']);
@@ -99,12 +99,12 @@ test('detection: noise radius — running on wood 140, on carpet 40, walking sil
 
 // --- world.js: multi-guard ---
 
-test('world: 5 guards with names, guard alias kept for M1/M2 callers', () => {
+test('world: 6 guards with names, guard alias kept for M1/M2 callers', () => {
   const w = createWorld();
-  assert.equal(w.guards.length, 5);
+  assert.equal(w.guards.length, 6);
   assert.deepEqual(
     w.guards.map((g) => g.name),
-    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5'],
+    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5', 'USHER 6'],
   );
   assert.equal(w.guard, w.guards[0]);
   assert.equal(w.props.length, 3);

@@ -16,7 +16,7 @@ import {
 // Re-exported for callers that used the M1 location (moved to vision.js).
 export { segmentBlocked };
 
-// Level (level.js) + live state: 5 ushers, 3 props, rings, noise.
+// Level (level.js) + live state: 6 ushers, 3 props, rings, noise.
 export function createWorld() {
   const level = buildLevel();
   const guards = level.guards.map((spec) =>

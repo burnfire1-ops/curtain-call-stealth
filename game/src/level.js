@@ -34,28 +34,43 @@ export function buildLevel() {
       { id: 'mask', name: 'Golden Mask', x: 520, y: 90, taken: false },
       { id: 'violin', name: "Lead's Violin", x: 880, y: 500, taken: false },
     ],
-    // 1 Foyer + 2 Auditorium + 2 Backstage. Patrol routes never cross a
-    // cover (M2 debt: guards have no pathfinding, only collision).
+    // 1 Foyer + 2 Auditorium + 2 Backstage + 1 top strip (M7). Patrol
+    // routes never cross a cover (M2 debt: guards have no pathfinding,
+    // only collision).
+    // M6: U2's west waypoint moved 420 -> 440 (420-14 overlapped curtain
+    // A, so the guard waited blocked forever); U2/U4 stagger — they
+    // start at their EAST waypoint facing west, so the patrols are not
+    // one synchronized wave the player can outrun in a straight line.
+    // M7: U3 stagger REVERTED (parent decision — it broke the Foyer
+    // teach contract + the carpet-quiet test); U3 starts west again,
+    // facing east. USHER 6 added on the top strip (y=60, x 500-900)
+    // to close the top-wall highway (M6 §4.2): a player hugging the
+    // top wall now meets a horizontal cone on the same strip. U6
+    // starts west facing east, like U1/U5.
     guards: [
       {
         name: 'USHER 1', x: 140, y: 300,
         waypoints: [{ x: 140, y: 300 }, { x: 360, y: 300 }],
       },
       {
-        name: 'USHER 2', x: 420, y: 120,
-        waypoints: [{ x: 420, y: 120 }, { x: 620, y: 120 }],
+        name: 'USHER 2', x: 620, y: 120, dir: { x: -1, y: 0 },
+        waypoints: [{ x: 440, y: 120 }, { x: 620, y: 120 }],
       },
       {
         name: 'USHER 3', x: 420, y: 520,
         waypoints: [{ x: 420, y: 520 }, { x: 620, y: 520 }],
       },
       {
-        name: 'USHER 4', x: 720, y: 200,
+        name: 'USHER 4', x: 900, y: 200, dir: { x: -1, y: 0 },
         waypoints: [{ x: 720, y: 200 }, { x: 900, y: 200 }],
       },
       {
         name: 'USHER 5', x: 720, y: 380,
         waypoints: [{ x: 720, y: 380 }, { x: 900, y: 380 }],
+      },
+      {
+        name: 'USHER 6', x: 500, y: 60,
+        waypoints: [{ x: 500, y: 60 }, { x: 900, y: 60 }],
       },
     ],
     // Binary lighting (tesis differentiator 4): warm pools = danger

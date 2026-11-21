@@ -7,11 +7,11 @@
 import CONFIG from './config.js';
 import { updateSuspicion } from './detection.js';
 
-export function createGuard({ x, y, waypoints, speed = CONFIG.GUARD_SPEED, name = 'USHER' }) {
+export function createGuard({ x, y, waypoints, speed = CONFIG.GUARD_SPEED, name = 'USHER', dir = { x: 1, y: 0 } }) {
   return {
-    name, // 'USHER 1' .. 'USHER 5' — set by world.js from the level spec
+    name, // 'USHER 1' .. 'USHER 6' — set by world.js from the level spec
     x, y, r: CONFIG.GUARD_R,
-    dir: { x: 1, y: 0 },
+    dir, // initial facing from the level spec (M6 stagger); default east
     waypoints, wpIndex: 1, // heading to waypoint 1 first
     speed,
     state: 'patrol', // 'patrol' | 'suspicious' | 'chase' | 'search'
