@@ -265,7 +265,9 @@ test('hud: the minimap sits inside the canvas and clears the HUD panels', () => 
     && a.y < b.y + b.h && a.y + a.h > b.y;
   const panels = hudPanelRects();
   assert.equal(overlap(rect, panels.header), false, 'must not cover the header');
-  assert.equal(overlap(rect, panels.noise), false, 'must not cover the noise panel');
+  // HUD-fix: the noise panel is gone — the minimap must clear the
+  // bottom bar instead.
+  assert.equal(overlap(rect, panels.bottom), false, 'must not cover the bottom bar');
 });
 
 // --- score ---

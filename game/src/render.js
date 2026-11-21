@@ -6,7 +6,7 @@
 // wood stage, walls, curtain covers, props, patrol routes, cones, guards,
 // player, rings, HUD, overlays.
 import CONFIG from './config.js';
-import { drawHud, drawPanel, formatTime, winRank, hudPanelRects, scoreBreakdown } from './hud.js';
+import { drawHud, drawPanel, formatTime, winRank, scoreBreakdown, labelInsideHud } from './hud.js';
 import { shakeOffset } from './feel.js';
 
 const COLORS = {
@@ -160,14 +160,11 @@ function drawCameraMount(ctx, cam) {
   ctx.beginPath();
   ctx.arc(cam.x + cam.dir.x * 10, cam.y + cam.dir.y * 10, 2.5, 0, Math.PI * 2);
   ctx.fill();
-  // The label is skipped when the mount sits under the HUD header
-  // panel (CAM 1 at (520,60)): it would show through the translucent
-  // panel on top of USHER 6's label, which patrols the same strip.
-  // The cone below the panel + the roster line carry the camera.
-  const header = hudPanelRects().header;
-  const underPanel = cam.x > header.x && cam.x < header.x + header.w
-    && cam.y > header.y && cam.y < header.y + header.h;
-  if (!underPanel) {
+  // HUD-fix: the label is skipped when the mount sits under ANY HUD
+  // panel (M12 pattern, generalised from the header alone via
+  // labelInsideHud). CAM 1 at (520,60) sits under the header; the
+  // cone below the panel + the roster line carry the camera.
+  if (!labelInsideHud(cam.x, cam.y)) {
     ctx.fillStyle = COLORS.hudDim;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
@@ -218,7 +215,11 @@ function drawPerson(ctx, body, fill, label) {
   ctx.moveTo(body.x, body.y);
   ctx.lineTo(body.x + body.dir.x * (body.r + 6), body.y + body.dir.y * (body.r + 6));
   ctx.stroke();
-  if (label) {
+  // HUD-fix: a guard label whose anchor falls inside any HUD panel
+  // (USHER 6's strip, y60, sits under the header) is skipped — it
+  // would print through the translucent panel or sit half-clipped
+  // on the panel edge. The roster line carries the guard instead.
+  if (label && !labelInsideHud(body.x, body.y - body.r - 6)) {
     ctx.fillStyle = COLORS.hudDim;
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
@@ -376,7 +377,12 @@ function drawProps(ctx, world) {
     ctx.fillStyle = COLORS.propText;
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(prop.name.toUpperCase(), prop.x, prop.y + 22);
+    // HUD-fix: skip the prop label when its anchor falls inside a
+    // HUD panel (the Violin label sits under the minimap) — the
+    // minimap's gold diamond marks the prop instead.
+    if (!labelInsideHud(prop.x, prop.y + 22)) {
+      ctx.fillText(prop.name.toUpperCase(), prop.x, prop.y + 22);
+    }
   }
 }
 

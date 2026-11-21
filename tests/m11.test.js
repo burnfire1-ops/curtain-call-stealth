@@ -38,7 +38,7 @@ test('render M11: roomLabels returns one label per wing, in-wing', () => {
   assert.ok(aud.x >= 380 && aud.x < 720, 'AUDITORIUM between curtain A and crate');
   assert.ok(back.x >= 720, 'BACKSTAGE east of the crate');
   // Regression: the first screenshot pass caught FOYER at y=72 hidden
-  // under the HUD header panel (y8..92) during play.
+  // under the HUD header panel (y8..64 after the HUD-fix) during play.
   assert.ok(foyer.y > 92, 'FOYER below the HUD header panel');
   for (const l of labels) {
     assert.ok(l.x > 0 && l.x < CONFIG.VIEW_WIDTH, 'label inside canvas x');
@@ -61,7 +61,9 @@ test('hud M11: panels fit the canvas, clear the EXIT, do not overlap', () => {
     assert.ok(p.y + p.h <= CONFIG.VIEW_HEIGHT, 'panel inside canvas (bottom)');
     assert.ok(!overlaps(p, exit), 'panel clears the EXIT box');
   }
-  assert.ok(!overlaps(panels.header, panels.noise), 'panels do not overlap each other');
+  // HUD-fix: the noise panel is gone — the legend/roster/SOUND live
+  // in the bottom bar now (panels.header vs panels.bottom).
+  assert.ok(!overlaps(panels.header, panels.bottom), 'panels do not overlap each other');
 });
 
 // --- mock canvas: records every draw call ---
@@ -119,10 +121,12 @@ test('render M11: play frame draws panels, gradients, room labels', () => {
 
   // Framed HUD: panel A rect drawn (fill, not just the old flat strip).
   const rects = ctx.calls.filter((c) => c[0] === 'fillRect');
-  assert.ok(rects.some((c) => c[1] === 8 && c[2] === 8 && c[3] === 836 && c[4] === 84),
-    'header panel rect (8,8,836,84) drawn');
-  assert.ok(rects.some((c) => c[1] === 560 && c[2] === 104 && c[3] === 392 && c[4] === 22),
-    'noise panel rect (560,104,392,22) drawn');
+  // HUD-fix: header is 2 rows in 56px now (was 4 rows in 84px); the
+  // noise panel (560,104,392,22) is gone, replaced by the bottom bar.
+  assert.ok(rects.some((c) => c[1] === 8 && c[2] === 8 && c[3] === 836 && c[4] === 56),
+    'header panel rect (8,8,836,56) drawn');
+  assert.ok(rects.some((c) => c[1] === 8 && c[2] === 536 && c[3] === 744 && c[4] === 56),
+    'bottom panel rect (8,536,744,56) drawn');
   // Panel borders stroked.
   assert.ok(ctx.calls.some((c) => c[0] === 'strokeRect'), 'panel border stroked');
 
