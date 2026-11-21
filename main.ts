@@ -12,7 +12,7 @@
 // /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
@@ -20,13 +20,19 @@ import { buildDossier } from './vendor/makefun-game.ts';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// Clean first: a repeated local run into the same directory must not
-// keep stale files from an earlier run (a deleted game file would
-// otherwise survive in /output and break the two-runs-identical rule).
+// Clear the output directory's CONTENTS, never the directory itself:
+// in the grader /output is a mounted volume, and removing a mount
+// point throws EBUSY (Device or resource busy) — which is exactly how
+// round 1 failed (run_completes, exit 1). A repeated local run into the
+// same directory must still not keep stale files from an earlier run
+// (a deleted game file would otherwise survive in /output and break
+// the two-runs-identical rule), so each child is removed instead.
 // The grader hands this program a fresh /output, so this only matters
 // locally — but the same command must give the same bytes everywhere.
-if (out !== '/') rmSync(out, { recursive: true, force: true });
-mkdirSync(out, { recursive: true });
+if (out !== '/') {
+  mkdirSync(out, { recursive: true });
+  for (const name of readdirSync(out)) rmSync(join(out, name), { recursive: true, force: true });
+}
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
