@@ -68,26 +68,26 @@ export function applyShot(name) {
     return { world, screen: 'select', campaign: selectCampaign() };
   }
   if (name === 'play2') {
-    // M14 shot 2: Job 2 mid-game — the player threw a coin toward the
-    // north hall (gold ring at the landing point), CAM 2's teal cone
-    // is sweeping onto the player, and USHER 2 is walking to
-    // investigate the clink (Search, last-known = the coin). A smoke
-    // cloud hangs by curtain A (SMOKE ×1), LASER 1 is live across the
-    // middle hall, LASER 3 is down (dashed), LASER 2 is live on the
-    // Baton approach, and the minimap shows every dot. COINS ×2.
+    // M15 shot 2: Job 2 mid-game, STAGED CALM (the M14 shot was too
+    // busy: coin ring + spotted camera + smoke + 2 live lasers at
+    // once). Now the player is hidden in the dark west of curtain A,
+    // ONE guard searches the south hall (last-known = a noise at
+    // (600,400)), CAM 2 sweeps the middle hall (suspicion 0, not
+    // spotted), all 3 lasers are DOWN (dashed, not live), no coin
+    // ring, no smoke cloud, no footstep rings. COINS ×3, SMOKE ×2
+    // (full). Exposure 0.2 — CALM. The minimap still shows every dot.
     const world = createWorld(1);
     const cam2 = world.cameras[1];
-    cam2.angle = Math.atan2(420 - cam2.y, 560 - cam2.x);
+    cam2.angle = Math.atan2(300 - cam2.y, 500 - cam2.x);
     cam2.dir = { x: Math.cos(cam2.angle), y: Math.sin(cam2.angle) };
-    cam2.suspicion = 0.6;
-    cam2.state = 'spotted';
-    world.coinRing = { x: 600, y: 400, radius: 200, age: 0.1 };
-    world.coins = 2;
-    world.smokes = 1;
-    world.smokeClouds = [{ x: 500, y: 350, r: 90, age: 0.5 }];
-    world.lasers[0].on = true;
+    cam2.suspicion = 0;
+    cam2.state = 'sweep';
+    world.coins = 3;
+    world.smokes = 2;
+    world.smokeClouds = [];
+    world.lasers[0].on = false;
     world.lasers[0].phaseT = 0.5;
-    world.lasers[1].on = true;
+    world.lasers[1].on = false;
     world.lasers[1].phaseT = 0.3;
     world.lasers[2].on = false;
     world.lasers[2].phaseT = 1.0;
@@ -98,14 +98,10 @@ export function applyShot(name) {
       lastKnown: { x: 600, y: 400 },
     });
     world.guards[1].searchTimeLeft = 2.0;
-    world.player.x = 560;
-    world.player.y = 420;
+    world.player.x = 360;
+    world.player.y = 140;
     world.player.dir = { x: 1, y: 0 };
-    world.rings = [
-      { x: 550, y: 420, age: 0.2, kind: 'guard' },
-      { x: 540, y: 430, age: 0.5, kind: 'guard' },
-    ];
-    world.exposure = 0.6;
+    world.exposure = 0.2;
     return { world, screen: 'play', campaign: freshCampaign() };
   }
   if (name === 'chase2') {
@@ -136,6 +132,12 @@ export function applyShot(name) {
     world.player.dir = { x: 1, y: 0 };
     world.feel.alerts.push({ guard: world.guards[2], age: 0 });
     world.exposure = 1.0;
+    // M15: a chase only happens after a detection (world.js counts
+    // detections on chase entry), so the frozen alarm frame must carry
+    // one — the M14 frame showed "EXIT: OPEN · GHOST" while USHER 3
+    // chased, which contradicted the rail. The goal line now reads
+    // "SPOTTED ×1" and the live score loses the GHOST bonus (200).
+    world.detections = 1;
     return { world, screen: 'play', campaign: freshCampaign() };
   }
   if (name === 'end2') {

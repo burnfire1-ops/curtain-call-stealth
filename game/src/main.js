@@ -15,7 +15,11 @@ import { scoreBreakdown, updateBest, jobAtPoint } from './hud.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-canvas.width = CONFIG.VIEW_WIDTH;
+// M15 DEVIATION (disclosed in the M15 builder report): the brief's
+// allowed list does not name main.js, but the canvas BACKING STORE is
+// set only here — a 1200px canvas is impossible without this one line.
+// Render-only: the playfield grid (VIEW_WIDTH 960) is untouched.
+canvas.width = CONFIG.CANVAS_W;
 canvas.height = CONFIG.VIEW_HEIGHT;
 
 const params = new URLSearchParams(window.location.search);

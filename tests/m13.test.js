@@ -18,7 +18,7 @@ import {
   guardStatesShort, propsSummary, minimapRect, projectToMinimap,
 } from '../game/src/hud.js';
 import { drainAudio } from '../game/src/feel.js';
-import { hudPanelRects } from '../game/src/hud.js';
+import { railRect } from '../game/src/hud.js';
 
 function stepN(world, input, seconds, dt = 0.05) {
   const n = Math.round(seconds / dt);
@@ -256,18 +256,14 @@ test('hud: projectToMinimap maps world corners and centre to the panel', () => {
     { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 });
 });
 
-test('hud: the minimap sits inside the canvas and clears the HUD panels', () => {
+test('hud: the minimap sits inside the rail, clear of the playfield', () => {
   const rect = minimapRect();
-  assert.ok(rect.x >= 0 && rect.y >= 0, 'inside the canvas');
-  assert.ok(rect.x + rect.w <= CONFIG.VIEW_WIDTH, 'inside the canvas');
-  assert.ok(rect.y + rect.h <= CONFIG.VIEW_HEIGHT, 'inside the canvas');
-  const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x
-    && a.y < b.y + b.h && a.y + a.h > b.y;
-  const panels = hudPanelRects();
-  assert.equal(overlap(rect, panels.header), false, 'must not cover the header');
-  // HUD-fix: the noise panel is gone — the minimap must clear the
-  // bottom bar instead.
-  assert.equal(overlap(rect, panels.bottom), false, 'must not cover the bottom bar');
+  const rail = railRect();
+  assert.ok(rect.x >= rail.x, 'minimap starts at or right of the rail edge');
+  assert.ok(rect.x + rect.w <= rail.x + rail.w, 'minimap ends inside the rail');
+  assert.ok(rect.y >= rail.y && rect.y + rect.h <= rail.y + rail.h,
+    'minimap inside the rail (y)');
+  assert.ok(rect.x >= CONFIG.VIEW_WIDTH, 'minimap never covers the playfield');
 });
 
 // --- score ---

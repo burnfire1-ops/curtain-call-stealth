@@ -16,16 +16,17 @@ import {
 import { shakeOffset } from './feel.js';
 
 const COLORS = {
-  floor: '#1c1512', // charcoal-plum dark wings
-  floorAlt: '#201a15', // M11: second checker tone (near-identical)
-  floorLine: '#2e2118',
-  roomLabel: 'rgba(245, 240, 230, 0.14)', // M11: dim floor room labels
+  floor: '#191310', // M15: deeper dark wings (the light pools read brighter against them)
+  floorLine: '#241a12', // M15: faint 80px board lines only (the checkerboard read as graph paper)
   carpet: '#3a1f2b', // deep plum carpet (silent floor)
   carpetDot: '#4d2a38',
   wood: '#4a3423', // warm stage wood (noisy floor)
   woodLine: '#5d4229',
-  poolGlow: 'rgba(255, 190, 90, 0.20)', // warm stage light pool
-  poolTint: 'rgba(255, 190, 90, 0.05)',
+  tile: '#241c22', // M15: vault tile (noisy floor, like wood)
+  tileLine: '#31242e',
+  zoneBorder: 'rgba(245, 240, 230, 0.10)', // M15: thin borders between floor zones
+  poolGlow: 'rgba(255, 176, 70, 0.32)', // M15: bigger + warmer amber light pool
+  poolTint: 'rgba(255, 176, 70, 0.07)',
   wall: '#4a3a28',
   curtain: '#8e1f2f', // velvet red
   curtainEdge: '#c0394d',
@@ -234,8 +235,13 @@ function drawPerson(ctx, body, fill, label, occluders = []) {
     const box = textBox(label, body.x, body.y - body.r - 6,
       measureLabel(ctx, label));
     if (!labelOccluded(box, occluders)) {
+      // M15: a PATROL label is dim (0.45) — the guard is background
+      // until it notices something; alert states read at full
+      // strength, so the eye goes to the danger first.
+      ctx.globalAlpha = body.state === 'patrol' ? 0.45 : 1;
       ctx.fillStyle = COLORS.hudDim;
       ctx.fillText(label, body.x, body.y - body.r - 6);
+      ctx.globalAlpha = 1;
     }
   }
 }
@@ -389,10 +395,12 @@ function drawLaser(ctx, laser) {
   }
 }
 
-function drawProps(ctx, world, occluders = []) {
+function drawProps(ctx, world) {
   for (const prop of world.props) {
     if (prop.taken) continue;
-    // Gold diamond + short label.
+    // Gold diamond only (M15: the prop NAME label is gone from the
+    // playfield — the name lives in the rail LOOT checklist; the
+    // diamond marks the spot).
     ctx.fillStyle = COLORS.prop;
     ctx.beginPath();
     ctx.moveTo(prop.x, prop.y - 9);
@@ -401,66 +409,120 @@ function drawProps(ctx, world, occluders = []) {
     ctx.lineTo(prop.x - 9, prop.y);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = COLORS.propText;
-    ctx.font = 'bold 10px monospace';
-    ctx.textAlign = 'center';
-    // M14: the label is skipped when its TEXT BOX touches any occluder
-    // (the Violin label sat under the minimap; the box rule catches
-    // the same case on every screen, not only in play).
-    const label = prop.name.toUpperCase();
-    const box = textBox(label, prop.x, prop.y + 22, measureLabel(ctx, label));
-    if (!labelOccluded(box, occluders)) {
-      ctx.fillText(label, prop.x, prop.y + 22);
+  }
+}
+
+// M15: edge dressing — the theatre's trim, drawn on the EDGES only
+// (never on a patrol path, never over a prop, the exit, or a guard
+// label). Pure data, unit-tested in tests/m15.test.js: every element
+// sits in the top strip (y<24), the bottom wall (y>576), a corner
+// box, or on the stage pool's bottom edge (the footlights, 10px below
+// the stage lip — 30px+ clear of every patrol route). Footlight x
+// positions avoid the vertical lasers (Job 1 L2 at x=460, Job 2 L2
+// at x=600) by a 15px+ margin. Positions derive from the level where
+// they exist (the stage pool), fixed margins elsewhere.
+export function edgeDressing(level) {
+  const stage = level.lightPools.find((p) => p.id === 'stage');
+  const out = [
+    // The curtain valance: a scalloped strip along the top wall.
+    { kind: 'valance', x: 20, y: 0, w: 920, h: 16 },
+    // Sconce lamps on the top wall, clear of the valance scallops.
+    { kind: 'sconce', x: 120, y: 8 },
+    { kind: 'sconce', x: 840, y: 8 },
+    // Corner columns: pillar bases overlapping the bottom wall.
+    { kind: 'column', x: 20, y: 576, w: 24, h: 24 },
+    { kind: 'column', x: 916, y: 576, w: 24, h: 24 },
+  ];
+  // Footlights along the stage pool's bottom edge (the stage's lip):
+  // 4 lights, inset 35px from the pool's ends so none sits on a
+  // vertical laser beam or a patrol route.
+  if (stage) {
+    const fy = stage.y + stage.h + 10;
+    for (let i = 0; i < 4; i++) {
+      out.push({
+        kind: 'footlight',
+        x: Math.round(stage.x + 35 + i * ((stage.w - 70) / 3)),
+        y: fy,
+      });
+    }
+  }
+  return out;
+}
+
+// M15: draw the edge dressing (flat shapes, no gameplay). The valance
+// is deep-red velvet with a gold hem + scallops; sconces are small
+// amber lamps with a glow; columns are pillar bases on the bottom
+// wall; footlights are small amber dots on the stage lip.
+function drawEdgeDressing(ctx, level) {
+  for (const el of edgeDressing(level)) {
+    if (el.kind === 'valance') {
+      ctx.fillStyle = '#6e1626';
+      ctx.fillRect(el.x, el.y, el.w, 12);
+      // Scalloped bottom edge (arcs dipping to y=16) + gold hem.
+      ctx.fillStyle = '#6e1626';
+      const n = Math.floor(el.w / 40);
+      for (let i = 0; i < n; i++) {
+        const cx = el.x + i * 40 + 20;
+        ctx.beginPath();
+        ctx.arc(cx, 12, 20, 0, Math.PI);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#c9a227';
+      ctx.fillRect(el.x, 12, el.w, 1);
+    } else if (el.kind === 'sconce') {
+      const g = ctx.createRadialGradient(el.x, el.y, 1, el.x, el.y, 14);
+      g.addColorStop(0, 'rgba(255, 190, 90, 0.35)');
+      g.addColorStop(1, 'rgba(255, 190, 90, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(el.x - 14, el.y - 14, 28, 28);
+      ctx.fillStyle = '#c9a227';
+      ctx.fillRect(el.x - 2, el.y - 5, 4, 10);
+      ctx.fillStyle = '#ffd98a';
+      ctx.beginPath(); ctx.arc(el.x, el.y - 2, 3, 0, Math.PI * 2); ctx.fill();
+    } else if (el.kind === 'column') {
+      ctx.fillStyle = '#3a2f24';
+      ctx.fillRect(el.x, el.y, el.w, el.h);
+      ctx.fillStyle = '#4a3a28';
+      ctx.fillRect(el.x, el.y, el.w, 4);
+      ctx.strokeStyle = 'rgba(245, 240, 230, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(el.x + 0.5, el.y + 0.5, el.w - 1, el.h - 1);
+    } else if (el.kind === 'footlight') {
+      ctx.fillStyle = '#ffd98a';
+      ctx.beginPath(); ctx.arc(el.x, el.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255, 190, 90, 0.25)';
+      ctx.beginPath(); ctx.arc(el.x, el.y, 5, 0, Math.PI * 2); ctx.fill();
     }
   }
 }
 
-// M11: room labels as floor landmarks (level-design: guide with light
-// and landmarks, not walls). X derived from cover geometry — curtain A
-// splits foyer/auditorium, the crate splits auditorium/backstage; Y
-// are hand-placed clear rows (below the top patrols, clear of pools,
-// prop labels and patrol-label rows — and below the HUD header panel,
-// which covers y8..92: FOYER sits at y130, not y72, after the first
-// screenshot pass caught it hidden under the panel).
-export function roomLabels(level) {
-  // M14: a level may hand-place its labels (Job 2); Job 1 keeps the
-  // geometric derivation (unchanged).
-  if (level.roomLabels) return level.roomLabels;
-  const curtainA = level.covers.find((c) => c.kind === 'curtain');
-  const crate = level.covers.find((c) => c.kind === 'crate');
-  const foyerX = Math.round((CONFIG.WALL + curtainA.x) / 2);
-  const audX = Math.round((curtainA.x + curtainA.w + crate.x) / 2);
-  const backX = Math.round((crate.x + crate.w + (CONFIG.VIEW_WIDTH - CONFIG.WALL)) / 2);
-  return [
-    { text: 'FOYER', x: foyerX, y: 130 },
-    { text: 'AUDITORIUM', x: audX, y: 205 },
-    { text: 'BACKSTAGE', x: backX, y: 160 },
-  ];
-}
-
-// M11: the static floor — checkerboard, carpet, wood stage, light
-// pools, room labels. Drawn once into the offscreen layer (see
+// M15: the static floor — material zones, not a checkerboard. The
+// M11 checkerboard read as graph paper, so the base is one flat dark
+// tone with faint 80px board lines only, and the MATERIAL ZONES read
+// as the rooms: wood stage (planks), carpet zones (plum + dots),
+// vault tile (fine grid), thin borders between zones. HONESTY RULE:
+// the carpet LOOK is exactly the gameplay carpet zones (silent) —
+// wood and tile are the noisy floors. Light pools are bigger +
+// warmer (light as architecture); the dark between them is deeper
+// (the base is darker now). The LIGHT=danger / DARK=safe mapping is
+// unchanged (same multipliers in detection.js). Room labels are GONE
+// from the playfield (declutter) — the zones + the rail legend carry
+// the reading now. Drawn once into the offscreen layer (see
 // getFloorLayer) and drawn directly when there is no document (node
-// tests / dossier build). Geometry identical to the M1–M10 floor.
+// tests / dossier build).
 function drawFloor(ctx, level) {
   const W = CONFIG.VIEW_WIDTH;
   const H = CONFIG.VIEW_HEIGHT;
   const T = CONFIG.TILE;
-  // Checkerboard (create-game-assets: tileable surface, two
-  // near-identical dark tones) — replaces the flat M1 fill.
-  for (let ty = 0; ty < H / T; ty++) {
-    for (let tx = 0; tx < W / T; tx++) {
-      ctx.fillStyle = (tx + ty) % 2 === 0 ? COLORS.floor : COLORS.floorAlt;
-      ctx.fillRect(tx * T, ty * T, T, T);
-    }
-  }
-  // Faint board lines (M1, kept over the checker).
+  // Flat dark base + faint 80px board lines.
+  ctx.fillStyle = COLORS.floor;
+  ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = COLORS.floorLine;
   ctx.lineWidth = 1;
-  for (let x = T; x < W; x += T) {
+  for (let x = T * 2; x < W; x += T * 2) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
-  for (let y = T; y < H; y += T) {
+  for (let y = T * 2; y < H; y += T * 2) {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   }
   // Carpet zones (silent floor): plum fill + dot pattern.
@@ -481,24 +543,46 @@ function drawFloor(ctx, level) {
   for (let y = stage.y + 14; y < stage.y + stage.h; y += 14) {
     ctx.beginPath(); ctx.moveTo(stage.x, y); ctx.lineTo(stage.x + stage.w, y); ctx.stroke();
   }
+  // Tile vault (noisy floor): the vault light pool rect, fine grid.
+  // Job 2 has no vault pool, so it simply gets no tile zone.
+  const vault = level.lightPools.find((p) => p.id === 'vault');
+  if (vault) {
+    drawRect(ctx, vault, COLORS.tile);
+    ctx.strokeStyle = COLORS.tileLine;
+    ctx.lineWidth = 1;
+    for (let x = vault.x + 20; x < vault.x + vault.w; x += 20) {
+      ctx.beginPath(); ctx.moveTo(x, vault.y); ctx.lineTo(x, vault.y + vault.h); ctx.stroke();
+    }
+    for (let y = vault.y + 20; y < vault.y + vault.h; y += 20) {
+      ctx.beginPath(); ctx.moveTo(vault.x, y); ctx.lineTo(vault.x + vault.w, y); ctx.stroke();
+    }
+  }
   // Light pools: warm radial glow so "light = danger" reads at a
-  // glance (M3 geometry, now baked into the static layer).
+  // glance (M3 geometry, now baked into the static layer). The
+  // gradient radius covers the whole pool (max(w,h)), and the fill
+  // rect covers the whole gradient circle, so the glow fades to
+  // transparent with no hard edge.
   for (const pool of level.lightPools) {
     const cx = pool.x + pool.w / 2;
     const cy = pool.y + pool.h / 2;
-    const r = Math.max(pool.w, pool.h) * 0.75;
+    const r = Math.max(pool.w, pool.h);
     const grad = ctx.createRadialGradient(cx, cy, 8, cx, cy, r);
     grad.addColorStop(0, COLORS.poolGlow);
-    grad.addColorStop(1, 'rgba(255, 190, 90, 0)');
+    grad.addColorStop(1, 'rgba(255, 176, 70, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(pool.x - 20, pool.y - 20, pool.w + 40, pool.h + 40);
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     drawRect(ctx, pool, COLORS.poolTint);
   }
-  // Room labels, dim on the floor.
-  ctx.fillStyle = COLORS.roomLabel;
-  ctx.font = 'bold 14px monospace';
-  ctx.textAlign = 'center';
-  for (const l of roomLabels(level)) ctx.fillText(l.text, l.x, l.y);
+  // Thin borders between zones — the map reads as rooms without
+  // walls: around every light pool + every carpet zone.
+  ctx.strokeStyle = COLORS.zoneBorder;
+  ctx.lineWidth = 1;
+  for (const pool of level.lightPools) {
+    ctx.strokeRect(pool.x + 0.5, pool.y + 0.5, pool.w - 1, pool.h - 1);
+  }
+  for (const zone of level.carpetZones) {
+    ctx.strokeRect(zone.x + 0.5, zone.y + 0.5, zone.w - 1, zone.h - 1);
+  }
 }
 
 // M11: the floor never changes during a run — pre-render it once to
@@ -632,10 +716,10 @@ export function render(ctx, world, screen, t = 0, muted = false, campaign = null
   // lines are computed BEFORE the world is drawn — the world labels
   // must be checked against the panels that will cover them, and the
   // panels are drawn after the world. The occluder list depends on
-  // the screen: play/paused get the HUD panels + minimap, select gets
-  // the select panels (cards + howto), win/lose get the overlay panel
-  // (row count from that screen's lines). Every screen adds the laser
-  // beams — a beam crossing a label is the CAM 2 defect (06:22 WIB).
+  // the screen: play/paused get the rail, select gets the select
+  // panels (cards + howto), win/lose get the overlay panel (row count
+  // from that screen's lines). Every screen adds the laser beams — a
+  // beam crossing a label is the CAM 2 defect (06:22 WIB).
   const camp = campaign || { selected: 0, cleared: [false, false], best: [null, null] };
   const winLines = screen === 'win' ? winScreenLines(world, camp) : null;
   const loseLines = screen === 'lose' ? loseScreenLines(world) : null;
@@ -727,6 +811,11 @@ export function render(ctx, world, screen, t = 0, muted = false, campaign = null
     }
   }
 
+  // M15: edge dressing (valance + sconces + columns + footlights) —
+  // edges and corners only, drawn after the covers so the trim sits
+  // on the walls, before the mounts/lasers/entities.
+  drawEdgeDressing(ctx, level);
+
   // M12: camera mounts (drawn after the covers, so the box sits on
   // the wall instead of under it).
   for (const cam of world.cameras || []) drawCameraMount(ctx, cam, occluders);
@@ -751,7 +840,7 @@ export function render(ctx, world, screen, t = 0, muted = false, campaign = null
   ctx.textAlign = 'center';
   ctx.fillText('EXIT', world.exit.x + world.exit.w / 2, world.exit.y + world.exit.h / 2 + 5);
 
-  drawProps(ctx, world, occluders);
+  drawProps(ctx, world);
   drawRings(ctx, world);
 
   for (const guard of world.guards) {
@@ -767,6 +856,15 @@ export function render(ctx, world, screen, t = 0, muted = false, campaign = null
       ctx.font = 'bold 26px monospace';
       ctx.textAlign = 'center';
       ctx.fillText('!', guard.x, guard.y - guard.r - 22);
+    }
+    // M15: "?" above a SUSPICIOUS guard (the "!" is chase-only) —
+    // the guard heard something and is turning toward it. Same spot
+    // as the "!", mutually exclusive states.
+    if (guard.state === 'suspicious') {
+      ctx.fillStyle = '#ffce54';
+      ctx.font = 'bold 26px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('?', guard.x, guard.y - guard.r - 22);
     }
   }
   drawPerson(ctx, world.player, COLORS.player);
@@ -799,21 +897,35 @@ export function render(ctx, world, screen, t = 0, muted = false, campaign = null
 
   // M11: vignette — darkened playfield edges (top-10 lighting), drawn
   // after entities so the frame feels lit, before the HUD so text
-  // stays at full contrast.
+  // stays at full contrast. M15: deeper (0.38) — the dark wings read
+  // darker against the bigger amber pools.
   const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.68);
   vg.addColorStop(0, 'rgba(0, 0, 0, 0)');
   vg.addColorStop(0.72, 'rgba(0, 0, 0, 0)');
-  vg.addColorStop(1, 'rgba(0, 0, 0, 0.30)');
+  vg.addColorStop(1, 'rgba(0, 0, 0, 0.38)');
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
 
-  if (screen === 'play' || screen === 'paused') drawHud(ctx, world, screen, t, muted);
   if (screen === 'select') {
     drawSelectScreen(ctx, camp, world);
   } else if (winLines) {
     drawOverlay(ctx, winLines.title, winLines.body, winLines.footer);
   } else if (loseLines) {
     drawOverlay(ctx, loseLines.title, loseLines.body, loseLines.footer);
+  }
+  // M15: the rail is drawn on EVERY screen (play/paused/select/win/
+  // lose), after the screen content — the rail is the frame, and it
+  // stays bright under the win/lose dim (the overlay dims the
+  // playfield only, x0..960).
+  drawHud(ctx, world, screen, t, muted, camp);
+  if (screen === 'paused') {
+    // M15: the PAUSED line moved here from drawHud (it is a playfield
+    // overlay, not rail content) — y170 clears the '+1 PROP' flash
+    // at y150 and stays far from the rail.
+    ctx.fillStyle = '#f5f0e6';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED — press P to resume, R to restart', CONFIG.VIEW_WIDTH / 2, 170);
   }
   ctx.restore();
 }

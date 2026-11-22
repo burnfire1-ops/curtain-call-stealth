@@ -5,14 +5,15 @@
 <title>CURTAIN CALL — The Midnight Theatre</title>
 <link rel="icon" href="data:,">
 <style>
-  /* M5: the page must fit EXACTLY in a 960x600 viewport, no scrollbar.
-     The canvas is 960x600; its frame is an outline (takes no layout
-     space), and there is no text below it — the controls already live
-     on the start screen and in the HUD line. body is exactly the
-     viewport: no margin, no min-height, overflow hidden. */
+  /* M15: the page must fit EXACTLY in a 1200x600 viewport, no
+     scrollbar. The canvas is 1200x600 (960 playfield + 240 rail);
+     its frame is an outline (takes no layout space), and there is
+     no text below it — the controls already live on the select
+     screen and in the rail. body is exactly the viewport: no
+     margin, no min-height, overflow hidden. */
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #14100c; }
   body { display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; width: 960px; height: 600px;
+  canvas { display: block; width: 1200px; height: 600px;
     outline: 2px solid #4a3a28; outline-offset: -2px; background: #241d18; }
 </style>
 </head>

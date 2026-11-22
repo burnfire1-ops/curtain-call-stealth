@@ -1,15 +1,13 @@
-// M14 screenshot driver — the M13 driver with the shot list updated:
-// 1-select (job board: Job 1 CLEARED + best, Job 2 open + selected,
-// HOW TO PLAY), 2-play (Job 2 mid-game), 3-end (Job 2 GHOST win +
-// CAMPAIGN COMPLETE total), 4-alarm (Job 2 alarm). Pure Node (global
-// WebSocket, no deps). Takes the 4 SHIP screenshots into
+// M15: 1200x600 — the 960 playfield + the 240 right rail. Pure Node
+// (global WebSocket, no deps). Takes the 4 SHIP screenshots into
 // repo/screenshots/ via the frozen ?shot= frames (deterministic,
-// reproducible). Also checks the M5 index.html fix: the page must fit
-// EXACTLY in a 960x600 viewport (scrollWidth/Height == 960/600, no
+// reproducible). Also checks the M15 index.html fix: the page must fit
+// EXACTLY in a 1200x600 viewport (scrollWidth/Height == 1200/600, no
 // scrollbar) and 0 console errors on every shot.
 // Expects Chrome on --remote-debugging-port=9223 and game/ served on
 // 127.0.0.1:8124. Usage: node prototypes/m13/cdp-shots.mjs <outdir>
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const OUT = process.argv[2] || '/tmp/m5-shots';
 fs.mkdirSync(OUT, { recursive: true });
@@ -57,6 +55,12 @@ async function evalJs(expr) {
 async function shot(name) {
   const r = await send('Page.captureScreenshot', { format: 'png' });
   fs.writeFileSync(`${OUT}/${name}`, Buffer.from(r.result.data, 'base64'));
+  // M15: Chrome's PNG encoder leaves 1200x600 frames over the 256 KiB
+  // cap (2-play +4,848 B, 4-alarm +8,782 B over) — re-encode losslessly
+  // (pixel-identical, PIL max compression) so every shot fits.
+  execFileSync('python3', ['-c',
+    "from PIL import Image; import sys; im = Image.open(sys.argv[1]); im.save(sys.argv[1], optimize=True, compress_level=9)",
+    `${OUT}/${name}`], { stdio: 'ignore' });
   const size = fs.statSync(`${OUT}/${name}`).size;
   log.push(`shot ${name} (${size} bytes, ${size <= 262144 ? 'OK <=256KiB' : 'OVER 256KiB'})`);
 }
@@ -65,14 +69,14 @@ await send('Runtime.enable');
 await send('Page.enable');
 await send('Log.enable');
 await send('Emulation.setDeviceMetricsOverride', {
-  width: 960, height: 600, deviceScaleFactor: 1, mobile: false,
+  width: 1200, height: 600, deviceScaleFactor: 1, mobile: false,
 });
 
-// Page-fit check (M5 index.html fix): no scrollbar at 960x600.
+// Page-fit check (M15 index.html fix): no scrollbar at 1200x600.
 await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=select' });
 await sleep(1200);
 const fit = await evalJs(`JSON.stringify({ sw: document.documentElement.scrollWidth, sh: document.documentElement.scrollHeight, iw: window.innerWidth, ih: window.innerHeight, canvas: document.getElementById('game').getBoundingClientRect().toJSON() })`);
-log.push('page fit (expect sw=960 sh=600): ' + fit);
+log.push('page fit (expect sw=1200 sh=600): ' + fit);
 await shot('1-select.png');
 
 await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=play2' });

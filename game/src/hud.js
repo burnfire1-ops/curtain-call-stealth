@@ -4,6 +4,7 @@
 // Pure helpers are unit-tested (tests/m4.test.js); drawHud is verified
 // visually via headless screenshots, like render.js in M1–M3.
 import CONFIG from './config.js';
+import { lightAt, floorAt } from './level.js'; // M15: rail VISIBILITY/NOISE words read the live floor/light
 
 // Legend (tesis differentiator 4): light = danger, dark = safe, and the
 // floor that talks — readable at a glance, also on the judge's sheet.
@@ -139,14 +140,14 @@ export function propsChecklistLine(summary) {
     + summary.items.map((i) => `${i.taken ? '✓' : '○'} ${i.name}`).join(' ');
 }
 
-// M13 minimap (game-ui-ux: a tactical map, always on, bottom-right
-// — the corner the header and bottom bar do not use). The panel sits
-// clear of the header (y8..64) and the bottom bar (y536..592);
-// it covers floor only (the Violin prop sits under it, and the map
-// itself marks the prop as a gold diamond, so the objective stays
-// readable). Pure projection — unit-tested in tests/m13.test.js.
+// M15 minimap (game-ui-ux: a tactical map, always on) — moved off
+// the playfield into the rail bottom (the M14 bottom-right panel
+// covered the Violin prop and forced its label to be skipped). The
+// panel is aspect-correct (160x100 = 960:600), centred in the rail,
+// opaque so nothing shows through it. Pure projection — the m13
+// corner/centre mapping test still applies to the new rect.
 export function minimapRect() {
-  return { x: 764, y: 476, w: 188, h: 116 };
+  return { x: 1000, y: 490, w: 160, h: 100 };
 }
 
 export function projectToMinimap(x, y, rect = minimapRect()) {
@@ -203,46 +204,72 @@ export function drawPanel(ctx, x, y, w, h, border = COLORS.panelBorder, fill = C
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 }
 
-// HUD-fix: HUD panel rects — header holds title/timer/meter only
-// (2 rows in 56px); the legend + roster + SOUND moved to the bottom
-// bar, one row each, so no text row sits <10px from a panel edge.
-// The bottom bar clears the lowest patrol (USHER 3 at y520, body
-// bottom 520+14=534; player spawn bottom 520+12=532) and the carpet
-// zone's left edge (x700); it stops at x752, clear of the minimap
-// (x764..952). Both panels clear the EXIT box (860,40,60,60).
-export function hudPanelRects() {
+// M15 — the right rail (game-ui-ux: sidebar HUD, the top-3 pattern):
+// the header bar and the bottom bar are DELETED, and every HUD
+// element lives in one 240px rail at the canvas's right edge — the
+// playfield (x0..960) is 100% game, no panel ever covers it. The rail
+// is the single HUD panel now: one dark navy slab, a thin gold
+// divider at x=960, sections top-to-bottom (title / job / score /
+// objective / stage pill + suspicion bar / visibility / noise / loot
+// checklist / ushers roster / goal / icon legend / controls /
+// minimap). All text is 10–15px monospace on the 216px inner width
+// (x972..1188, 12px margins).
+export function railRect() {
+  return { x: CONFIG.RAIL_X, y: 0, w: CONFIG.RAIL_W, h: CONFIG.CANVAS_H };
+}
+
+// M15: the rail text rows, as pure data — the single source of truth
+// for drawHud AND the tests (game-ui-ux: rows sized to their section
+// with breathing room, never crammed). Every baseline is >=10px from
+// the rail's top/bottom edge (title 26, last controls line 482 vs
+// the 600px rail) and every line fits the 216px inner width. The
+// roster block reserves 5 lines (312..364); the sections below it
+// (goal 384, legend 404..450, controls 468/482, minimap 490..590)
+// are FIXED positions, so a short calm roster leaves breathing room
+// instead of shifting the layout.
+export function railLayout() {
+  const rail = railRect();
+  const x = rail.x + 12; // 972 — the fixed left margin
+  const cx = rail.x + rail.w / 2; // 1080 — the centred column
+  const right = rail.x + rail.w - 12; // 1188 — the right margin
   return {
-    header: { x: 8, y: 8, w: 836, h: 56 },
-    bottom: { x: 8, y: 536, w: 744, h: 56 },
+    rail,
+    innerX: x,
+    centerX: cx,
+    rightX: right,
+    title: { x: cx, y: 26 },
+    job: { x: cx, y: 44 },
+    score: { x: cx, y: 64 },
+    dividerY: 74,
+    objectiveHeader: { x, y: 92 },
+    objectiveLines: [{ x, y: 108 }, { x, y: 123 }],
+    pill: { x, y: 138, w: 104, h: 22 },
+    suspicionBar: { x: right - 88, y: 144, w: 88, h: 10 },
+    visibility: { label: { x, y: 178 }, word: { x: right, y: 178 } },
+    noise: { label: { x, y: 196 }, word: { x: right, y: 196 } },
+    noiseBar: { x, y: 204, w: 88, h: 10 },
+    lootHeader: { x, y: 232 },
+    propLines: [{ x, y: 248 }, { x, y: 262 }, { x, y: 276 }],
+    ushersHeader: { x, y: 296 },
+    rosterLineY: (i) => 312 + i * 13, // max 5 lines (312..364)
+    rosterMaxLines: 5,
+    goal: { x, y: 384 },
+    legendHeader: { x, y: 404 },
+    legendCols: [x, x + 72, x + 144],
+    legendRows: [420, 435, 450],
+    controls: [{ x, y: 468 }, { x, y: 482 }],
+    minimap: minimapRect(),
   };
 }
 
-// HUD-fix: the HUD text rows, as pure data — the single source of
-// truth for drawHud AND the tests (game-ui-ux: rows sized to their
-// panel with breathing room, never crammed). Header: 2 rows
-// (title 28, meter 53 — the old 4th row sat at baseline 84 in an
-// 84px panel, 8px from the edge: the overflow the user reported).
-// Bottom bar: legend 552, roster 567, noise 582 — every baseline
-// >=10px from its panel's top/bottom edge (top gap 16, bottom 10).
-export function hudLayout() {
-  const panels = hudPanelRects();
-  return {
-    panels,
-    headerRows: { title: 28, meter: 53 },
-    bottomRows: { legend: 552, roster: 567, noise: 582 },
-  };
-}
-
-// HUD-fix: is a label anchor point covered by any HUD panel? The M12
-// drawCameraMount pattern (point-in-rect), extended from the header
-// alone to every HUD panel + the minimap. A label whose anchor falls
-// inside a panel would print through the translucent fill or sit
-// half-clipped on the panel edge, so render.js skips it — the roster
-// line in the bottom bar carries the guard/camera instead.
+// M15: is a label anchor point covered by the HUD? The rail is the
+// only HUD panel now — a point inside x960..1200 is under it, a
+// point on the playfield (x<960) is clear. render.js skips a world
+// label whose TEXT BOX touches the rail (the box rule, 06:22 WIB);
+// the roster line in the rail carries the guard/camera instead.
 export function labelInsideHud(x, y) {
-  const panels = hudPanelRects();
-  const rects = [panels.header, panels.bottom, minimapRect()];
-  return rects.some((r) => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+  const r = railRect();
+  return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h;
 }
 
 // HUD-fix: the roster line, compressed until it fits `maxWidth`
@@ -410,7 +437,133 @@ const pillByState = {
 // a near-miss reads even at contact-sheet size. `muted` shows MUTE
 // next to the timer (the M key itself is documented on the start
 // screen — the controls line is too long to carry it, see below).
-export function drawHud(ctx, world, screen, t, muted = false) {
+// M15: the rail's per-guard roster lines (Moonlit-rail pattern: one
+// line per guard, alerted guards named with tile distance, patrols
+// collapsed to a count, cameras as short "C1 SWEEP" lines). Capped
+// at railLayout().rosterMaxLines (5): alerted guards first, then
+// cameras, then the patrol count; overflow collapses to "+N more".
+// Pure, unit-tested in tests/m15.test.js.
+export function railRosterLines(world) {
+  const player = world.player;
+  const tile = (g) => (g.x === undefined ? ''
+    : ` ${Math.round(Math.hypot(g.x - player.x, g.y - player.y) / CONFIG.TILE)}t`);
+  const alerted = world.guards
+    .filter((g) => g.state !== 'patrol')
+    .map((g) => `U${g.name.replace('USHER ', '')} ${g.state.toUpperCase()}${tile(g)}`);
+  const cams = (world.cameras || []).map((c) => {
+    const n = c.name.replace('CAM ', 'C');
+    return `${n} ${c.state === 'spotted' ? 'SPOTTED' : 'SWEEP'}`;
+  });
+  const patrolling = world.guards.filter((g) => g.state === 'patrol').length;
+  const lines = [...alerted, ...cams];
+  if (patrolling > 0) lines.push(`${patrolling} PATROL`);
+  const max = railLayout().rosterMaxLines;
+  if (lines.length <= max) return lines;
+  return [...lines.slice(0, max - 1), `+${lines.length - (max - 1)} more`];
+}
+
+// M15: the rail VISIBILITY word — the binary light rule, as a word
+// (game-ui-ux: colour never the only signal). Reads the SAME lightAt
+// the simulation uses, so the word can never disagree with the
+// suspicion fill: standing in a pool is IN THE LIGHT (danger).
+export function visibilityWord(world) {
+  return lightAt(world.player.x, world.player.y, world.level) === CONFIG.LIGHT_POOL
+    ? 'IN THE LIGHT' : 'IN THE DARK';
+}
+
+// M15: the rail NOISE word — short form of the old SOUND line. The
+// radius is the audibility the simulation uses (0 = walking, 40 =
+// running on carpet, 140 = running on wood); the floor word comes
+// from the same floorAt the footstep sound uses.
+export function noiseWord(world) {
+  const n = world.lastNoise;
+  if (!n || n.radius <= 0) return 'silent';
+  return floorAt(world.player.x, world.player.y, world.level) === 'carpet'
+    ? 'quiet on carpet' : 'loud on wood';
+}
+
+// M15: the rail icon legend — the LEGEND constant's four rules plus
+// every map object, as small canvas-drawn icons + one-word labels
+// (game-ui-ux: icon + label, never colour alone). 9 items in 3
+// columns x 3 rows. Pure data; drawHud draws the icons.
+export function legendItems() {
+  return [
+    { key: 'usher', label: 'usher', icon: 'usher' },
+    { key: 'curtain', label: 'curtain', icon: 'curtain' },
+    { key: 'light', label: 'light', icon: 'light' },
+    { key: 'carpet', label: 'carpet', icon: 'carpet' },
+    { key: 'coin', label: 'coin', icon: 'coin' },
+    { key: 'smoke', label: 'smoke', icon: 'smoke' },
+    { key: 'camera', label: 'camera', icon: 'camera' },
+    { key: 'laser', label: 'laser', icon: 'laser' },
+    { key: 'exit', label: 'exit', icon: 'exit' },
+  ];
+}
+
+// M15: the stage pill fill — the stage word (CALM/UNEASY/HUNTED/
+// ALARM) in the stage colour, dark text on a filled pill, dim text
+// on the quiet CALM pill.
+const stagePill = {
+  CALM: { fill: '#3a2f24', border: '#5a6b7a', text: '#b8ab98' },
+  UNEASY: { fill: '#e8a33d', border: '#e8a33d', text: '#1a140f' },
+  HUNTED: { fill: '#ff9a3d', border: '#ff9a3d', text: '#1a140f' },
+  ALARM: { fill: '#ff3b30', border: '#ff3b30', text: '#ffffff' },
+};
+
+// M15: one legend icon — a 10px canvas shape, the same shape the map
+// uses for that object (usher dot + cone, curtain slab, light pool,
+// carpet slab, coin diamond, smoke puff, camera wedge, laser line,
+// exit door). x,y is the icon's top-left corner; the label sits at
+// x+14 on the same baseline.
+function drawLegendIcon(ctx, icon, x, y) {
+  ctx.save();
+  if (icon === 'usher') {
+    ctx.fillStyle = '#e8a33d';
+    ctx.beginPath(); ctx.arc(x + 5, y + 5, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(232, 179, 61, 0.5)';
+    ctx.beginPath(); ctx.moveTo(x + 5, y + 5); ctx.lineTo(x + 10, y); ctx.lineTo(x + 10, y + 10); ctx.closePath(); ctx.fill();
+  } else if (icon === 'curtain') {
+    ctx.fillStyle = '#8e1f2f'; ctx.fillRect(x, y + 1, 10, 8);
+    ctx.strokeStyle = 'rgba(255, 120, 140, 0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 5, y + 1); ctx.lineTo(x + 5, y + 9); ctx.stroke();
+  } else if (icon === 'light') {
+    ctx.fillStyle = 'rgba(255, 190, 90, 0.9)';
+    ctx.beginPath(); ctx.arc(x + 5, y + 5, 4, 0, Math.PI * 2); ctx.fill();
+  } else if (icon === 'carpet') {
+    ctx.fillStyle = '#3a1f2b'; ctx.fillRect(x, y + 1, 10, 8);
+    ctx.fillStyle = '#4d2a38'; ctx.fillRect(x + 2, y + 3, 2, 2); ctx.fillRect(x + 6, y + 6, 2, 2);
+  } else if (icon === 'coin') {
+    ctx.fillStyle = '#ffd94d';
+    ctx.beginPath(); ctx.moveTo(x + 5, y); ctx.lineTo(x + 10, y + 5); ctx.lineTo(x + 5, y + 10); ctx.lineTo(x, y + 5); ctx.closePath(); ctx.fill();
+  } else if (icon === 'smoke') {
+    ctx.fillStyle = 'rgba(200, 200, 205, 0.8)';
+    ctx.beginPath(); ctx.arc(x + 5, y + 5, 4, 0, Math.PI * 2); ctx.fill();
+  } else if (icon === 'camera') {
+    ctx.fillStyle = 'rgba(45, 212, 191, 0.9)';
+    ctx.beginPath(); ctx.moveTo(x + 1, y + 5); ctx.lineTo(x + 9, y + 1); ctx.lineTo(x + 9, y + 9); ctx.closePath(); ctx.fill();
+  } else if (icon === 'laser') {
+    ctx.strokeStyle = 'rgba(255, 70, 60, 0.95)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y + 5); ctx.lineTo(x + 10, y + 5); ctx.stroke();
+  } else if (icon === 'exit') {
+    ctx.fillStyle = '#2e7d32'; ctx.fillRect(x + 1, y + 1, 8, 8);
+    ctx.fillStyle = '#a5d6a7'; ctx.fillRect(x + 4, y + 3, 2, 4);
+  }
+  ctx.restore();
+}
+
+// M15: the right rail (game-ui-ux: sidebar HUD, the top-3 pattern).
+// Every HUD element lives in the rail; the playfield is 100% game.
+// Drawn on EVERY screen (play/paused/select/win/lose) — the rail is
+// the frame, not a play overlay: on select it shows the campaign
+// best instead of the live score, and the goal line drops the GHOST
+// word (nothing has been spotted yet on a title screen). `t` is real
+// time (seconds) and drives the pulse: above 0.7 suspicion the
+// suspicion bar throbs so a near-miss reads even at contact-sheet
+// size. `muted` shows MUTE next to the score. `campaign` is the
+// M14 campaign object (default = a fresh session).
+export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
+  const camp = campaign || { selected: 0, cleared: [false, false], best: [null, null] };
+  const L = railLayout();
   // M12: the meter shows the worst suspicion of guards AND cameras —
   // a camera filling up is as alarming as a guard filling up.
   // M13: the laser meter feeds the same bar + stage word.
@@ -418,151 +571,143 @@ export function drawHud(ctx, world, screen, t, muted = false) {
     world.guards.concat(world.cameras || []),
   ) || { state: 'patrol', suspicion: 0 };
   const worstValue = Math.max(worst.suspicion, world.laserSuspicion || 0);
+  const alarming = !!(world.alarm && world.alarm.active);
+  const stage = alarmStage(worstValue, alarming);
   const score = scoreBreakdown(world);
   const summary = propsSummary(world.props);
-  const layout = hudLayout();
-  const panels = layout.panels;
 
-  // HUD-fix: header is 2 rows only (title + meter) and the legend /
-  // roster / SOUND live in the bottom bar — the old 4-row header
-  // crammed the roster baseline 8px from the panel edge. All info
-  // from M4/M8/M12/M13 is kept — title, timer, meter, state, legend,
-  // guard list, props, SOUND — nothing dropped, only re-homed.
-  drawPanel(ctx, panels.header.x, panels.header.y, panels.header.w, panels.header.h);
-  drawPanel(ctx, panels.bottom.x, panels.bottom.y, panels.bottom.w, panels.bottom.h);
+  // The rail slab + its divider from the playfield.
+  ctx.fillStyle = 'rgba(13, 10, 8, 0.97)';
+  ctx.fillRect(L.rail.x, L.rail.y, L.rail.w, L.rail.h);
+  ctx.fillStyle = '#4a3a28';
+  ctx.fillRect(L.rail.x, L.rail.y, 1, L.rail.h);
 
-  ctx.textAlign = 'left';
-  ctx.font = 'bold 16px monospace';
+  // Title / job / score — centred, one straight centre column.
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 15px monospace';
   ctx.fillStyle = COLORS.hud;
-  ctx.fillText('CURTAIN CALL', 16, layout.headerRows.title);
-  // Timer, top-right INSIDE the header panel (M10: it floated at
-  // VIEW_WIDTH-16, unbacked, above the EXIT box). M13: the live
-  // score rides on the same row, left of the timer.
-  ctx.textAlign = 'right';
-  ctx.font = 'bold 16px monospace';
-  const timeText = muted ? `${formatTime(world.time)} · MUTE` : formatTime(world.time);
-  if (muted) ctx.fillStyle = '#ff6b57';
-  ctx.fillText(`SCORE ${score.total} · ${timeText}`, panels.header.x + panels.header.w - 8, layout.headerRows.title);
+  ctx.fillText('CURTAIN CALL', L.title.x, L.title.y);
+  ctx.font = '11px monospace';
+  ctx.fillStyle = COLORS.hudDim;
+  ctx.fillText(`JOB ${world.jobIndex + 1} · ${world.jobName}`, L.job.x, L.job.y);
+  ctx.font = 'bold 13px monospace';
   ctx.fillStyle = COLORS.hud;
+  const total = campaignTotal(camp.best);
+  const scoreText = screen === 'select'
+    ? (total > 0 ? `CAMPAIGN BEST ${total}` : 'NO JOBS CLEARED YET')
+    : `SCORE ${score.total} · ${muted ? `${formatTime(world.time)} · MUTE` : formatTime(world.time)}`;
+  ctx.fillText(scoreText, L.score.x, L.score.y);
   ctx.textAlign = 'left';
 
-  // Suspicion: segmented bar (M11, top-10 ALARM/HEAT style) + state
-  // pill sized to the label. Strings unchanged from M10.
-  // M12: a camera 'spotted' reads like a guard 'suspicious'; the
-  // building alarm overrides every pill with a solid-red ALARM!.
-  const stateText = {
-    patrol: 'unseen',
-    suspicious: 'SUSPICIOUS! Hide!',
-    chase: 'RUN! Hide!',
-    search: 'searching for you…',
-    sweep: 'unseen',
-    spotted: 'SPOTTED! Hide!',
-  };
-  const alarming = !!(world.alarm && world.alarm.active);
-  const label = alarming ? 'ALARM!' : (stateText[worst.state] || stateText.patrol);
-  const barX = 16;
-  // HUD-fix: the meter row baseline is layout.headerRows.meter (53);
-  // the bar sits 9px above it (y44..54) so the bar bottom is 10px
-  // clear of the header's bottom edge (y64) — the pill text and the
-  // stage word share the 53 baseline, COINS/SMOKE sits at 54.
-  const barY = layout.headerRows.meter - 9;
-  const segW = 26;
-  const segH = 10;
-  const segGap = 2;
-  const segTotal = 5;
-  const pulse = worstValue > 0.7 ? 0.65 + 0.35 * Math.sin(t * 10) : 1;
-  ctx.globalAlpha = pulse;
-  drawSegmentedBar(ctx, barX, barY, segW, segH, segGap,
-    segmentCount(worstValue, segTotal), segTotal,
-    worstValue > 0 ? COLORS.meterHigh : COLORS.meterLow);
-  ctx.globalAlpha = 1;
-  const pill = alarming ? pillByState.alarm
-    : (pillByState[worst.state] || pillByState.patrol);
+  // Divider under the header block.
+  ctx.fillStyle = 'rgba(245, 240, 230, 0.20)';
+  ctx.fillRect(L.innerX, L.dividerY, L.rail.w - 24, 1);
+
+  // OBJECTIVE — two lines, left-aligned on the fixed margin.
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = COLORS.hud;
+  ctx.fillText('OBJECTIVE', L.objectiveHeader.x, L.objectiveHeader.y);
   ctx.font = '12px monospace';
-  const tw = ctx.measureText(label).width;
-  const px = barX + segTotal * segW + (segTotal - 1) * segGap + 8;
-  const py = barY - 4;
-  pillPath(ctx, px, py, tw + 16, 18, 9);
+  ctx.fillStyle = COLORS.hudDim;
+  ctx.fillText('Steal back 3 props', L.objectiveLines[0].x, L.objectiveLines[0].y);
+  ctx.fillText('Reach the EXIT', L.objectiveLines[1].x, L.objectiveLines[1].y);
+
+  // Stage pill + suspicion bar, one row: the pill is the stage word
+  // (CALM/UNEASY/HUNTED/ALARM) in the stage colour, the bar is the
+  // same worst-suspicion value in 5 segments.
+  const pill = stagePill[stage];
+  pillPath(ctx, L.pill.x, L.pill.y, L.pill.w, L.pill.h, 9);
   ctx.fillStyle = pill.fill;
   ctx.fill();
   ctx.strokeStyle = pill.border;
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.fillStyle = pill.text;
-  ctx.textAlign = 'center';
-  ctx.fillText(label, px + (tw + 16) / 2, py + 13);
-  ctx.textAlign = 'left';
-  // M13: the alarm stage word right after the pill (CALM / UNEASY /
-  // HUNTED / ALARM) — the stage is a display mapping over the worst
-  // suspicion, so it never disagrees with the bar next to it.
-  const stage = alarmStage(worstValue, alarming);
-  ctx.fillStyle = STAGE_COLORS[stage];
   ctx.font = 'bold 12px monospace';
-  ctx.fillText(stage, px + tw + 16 + 8, py + 13);
-
-  // M12: coin counter, right-aligned on the meter row (the row's
-  // right side was empty; the count never moves the other HUD rows).
-  // M13: the smoke counter rides next to it, same row, same gold.
-  const coins = typeof world.coins === 'number' ? world.coins : 0;
-  const smokes = typeof world.smokes === 'number' ? world.smokes : 0;
-  ctx.fillStyle = COLORS.coin;
-  ctx.font = 'bold 14px monospace';
-  ctx.textAlign = 'right';
-  ctx.fillText(`COINS ×${coins} · SMOKE ×${smokes}`, panels.header.x + panels.header.w - 8, barY + 10);
+  ctx.textAlign = 'center';
+  ctx.fillText(stage, L.pill.x + L.pill.w / 2, L.pill.y + 15);
   ctx.textAlign = 'left';
+  const pulse = worstValue > 0.7 ? 0.65 + 0.35 * Math.sin(t * 10) : 1;
+  ctx.globalAlpha = pulse;
+  drawSegmentedBar(ctx, L.suspicionBar.x, L.suspicionBar.y, 16, L.suspicionBar.h, 2,
+    segmentCount(worstValue, 5), 5,
+    worstValue > 0 ? COLORS.meterHigh : COLORS.meterLow);
+  ctx.globalAlpha = 1;
 
-  // HUD-fix: legend + roster + SOUND live in the bottom bar now,
-  // one row each (baselines from hudLayout — every row >=10px from
-  // its panel edge). Strings unchanged; only the home moved.
-  // M8: short legend ONLY on the play HUD — no controls line (full
-  // controls live on the start screen) and no full LEGEND: the LEGEND
-  // constant is test-locked to all four rules (tests/m4.test.js) and
-  // the complete rules stay on the start screen. The dropped 4th rule
-  // (running on wood is noisy) is carried by the SOUND line + the
-  // player noise ring instead.
-  ctx.fillStyle = COLORS.hudDim;
+  // VISIBILITY + NOISE — label left, word right, one row each (the
+  // word IS the meter for visibility: binary light, binary word).
+  // The noise bar below the word scales from the same lastNoise
+  // radius the text reports (0 = silent, 40 = carpet, 140 = wood).
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = COLORS.hud;
+  ctx.fillText('VISIBILITY', L.visibility.label.x, L.visibility.label.y);
+  ctx.fillText('NOISE', L.noise.label.x, L.noise.label.y);
+  const vis = visibilityWord(world);
   ctx.font = '12px monospace';
-  // M12: the legend line also carries the camera roster — the guard
-  // line below is already near-full in an all-chase alarm, so the
-  // cameras ride here instead of overflowing the panel.
-  const camRoster = (world.cameras && world.cameras.length > 0)
-    ? `   |   ${cameraStatesShort(cameraStates(world.cameras))}`
-    : '';
-  ctx.fillText(`LIGHT=danger · DARK=safe · CARPET=silent${camRoster}`,
-    panels.bottom.x + 8, layout.bottomRows.legend);
-  // Per-guard state list (M8 compressed, M13 with tile distances)
-  // + objective checklist (✓ taken) + informative SPOTTED count.
-  // buildRosterLine compresses (distances -> 3 nearest -> none ->
-  // short checklist -> alert count) until the line fits the bar.
-  const states = guardStates(world.guards);
-  const rosterLine = buildRosterLine(states, world.player, summary,
-    world.detections, panels.bottom.w - 32, (t) => ctx.measureText(t).width);
-  ctx.fillText(rosterLine, panels.bottom.x + 8, layout.bottomRows.roster);
-  // SOUND line + noise segment bar, on the bottom bar's third row.
-  // Bar: 0 = silent, 1 = carpet (40px), 5 = wood (140px) — scaled
-  // from the same lastNoise radius the text reports.
+  ctx.textAlign = 'right';
+  ctx.fillStyle = vis === 'IN THE LIGHT' ? '#ffb84d' : '#a5d6a7';
+  ctx.fillText(vis, L.visibility.word.x, L.visibility.word.y);
+  ctx.fillStyle = COLORS.hudDim;
+  ctx.fillText(noiseWord(world), L.noise.word.x, L.noise.word.y);
+  ctx.textAlign = 'left';
   const noiseRadius = world.lastNoise ? world.lastNoise.radius : 0;
-  const noiseFilled = segmentCount(noiseRadius / CONFIG.NOISE_RUN_WOOD, 5);
-  const noiseY = layout.bottomRows.noise - 10;
-  drawSegmentedBar(ctx, panels.bottom.x + 8, noiseY, 8, 10, 2,
-    noiseFilled, 5, COLORS.meterLow);
-  ctx.fillStyle = COLORS.hudDim;
+  drawSegmentedBar(ctx, L.noiseBar.x, L.noiseBar.y, 16, L.noiseBar.h, 2,
+    segmentCount(noiseRadius / CONFIG.NOISE_RUN_WOOD, 5), 5, COLORS.meterLow);
+
+  // LOOT — the objective checklist, one line per prop (✓ taken).
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = COLORS.hud;
+  ctx.fillText(`LOOT · Props ${summary.taken}/${summary.total}`, L.lootHeader.x, L.lootHeader.y);
   ctx.font = '12px monospace';
-  ctx.fillText(lastNoiseText(world), panels.bottom.x + 8 + 5 * 8 + 4 * 2 + 8,
-    layout.bottomRows.noise);
+  summary.items.forEach((item, i) => {
+    ctx.fillStyle = item.taken ? COLORS.coin : COLORS.hudDim;
+    ctx.fillText(`${item.taken ? '✓' : '○'} ${item.name}`, L.propLines[i].x, L.propLines[i].y);
+  });
 
-  // M13: tactical minimap, bottom-right, always on (play + paused).
+  // USHERS — one line per guard (Moonlit-rail pattern), capped at 5.
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = COLORS.hud;
+  ctx.fillText('USHERS', L.ushersHeader.x, L.ushersHeader.y);
+  ctx.font = '12px monospace';
+  railRosterLines(world).forEach((line, i) => {
+    ctx.fillStyle = /PATROL/.test(line) ? COLORS.hudDim : COLORS.hud;
+    ctx.fillText(line, L.innerX, L.rosterLineY(i));
+  });
+
+  // GOAL — the exit state + the ghost word (select drops it: nothing
+  // has been spotted yet on a title screen).
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = world.detections === 0 ? '#a5d6a7' : '#ff8c42';
+  const goalText = screen === 'select'
+    ? 'EXIT: OPEN'
+    : `EXIT: OPEN · ${world.detections === 0 ? 'GHOST' : `SPOTTED ×${world.detections}`}`;
+  ctx.fillText(goalText, L.goal.x, L.goal.y);
+
+  // LEGEND — small canvas-drawn icons + one-word labels, 3x3
+  // (game-ui-ux: icon + label, never colour alone).
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = COLORS.hud;
+  ctx.fillText('LEGEND', L.legendHeader.x, L.legendHeader.y);
+  ctx.font = '11px monospace';
+  legendItems().forEach((item, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const ix = L.legendCols[col];
+    const iy = L.legendRows[row];
+    drawLegendIcon(ctx, item.icon, ix, iy - 8);
+    ctx.fillStyle = COLORS.hudDim;
+    ctx.fillText(item.label, ix + 14, iy);
+  });
+
+  // CONTROLS — two short lines (the full controls live on the select
+  // screen's HOW TO PLAY panel).
+  ctx.font = '10px monospace';
+  ctx.fillStyle = COLORS.hudDim;
+  ctx.fillText('WASD move · Shift run · C coin', L.controls[0].x, L.controls[0].y);
+  ctx.fillText('X smoke · P pause · M sound', L.controls[1].x, L.controls[1].y);
+
+  // Minimap, bottom of the rail, always on.
   drawMinimap(ctx, world);
-
-  if (screen === 'paused') {
-    // M11: moved 130 -> 170 — the '+1 PROP' flash sits at y150 and
-    // the bottom bar starts at y536; y170 clears the flash and stays
-    // far from every HUD panel.
-    ctx.fillStyle = COLORS.hud;
-    ctx.font = 'bold 20px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('PAUSED — press P to resume, R to restart', CONFIG.VIEW_WIDTH / 2, 170);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -797,10 +942,7 @@ export function laserOccluder(laser, pad = 4) {
 // laser beams.
 export function labelOccluders({ hud = false, overlay = null, lasers = [] } = {}) {
   const out = [];
-  if (hud) {
-    const p = hudPanelRects();
-    out.push(p.header, p.bottom, minimapRect());
-  }
+  if (hud) out.push(railRect()); // M15: the rail is the only HUD panel
   if (overlay) out.push(overlay);
   for (const l of lasers) out.push(laserOccluder(l));
   return out;

@@ -4,12 +4,9 @@
 // assumed). Screenshots (CDP) are the visual proof on top of this.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import CONFIG from '../game/src/config.js';
-import { buildLevel } from '../game/src/level.js';
-import { createWorld } from '../game/src/world.js';
 import { applyShot } from '../game/src/shots.js';
-import { render, roomLabels } from '../game/src/render.js';
-import { segmentCount, hudPanelRects } from '../game/src/hud.js';
+import { render } from '../game/src/render.js';
+import { segmentCount } from '../game/src/hud.js';
 
 // --- segmentCount (pure) ---
 
@@ -28,43 +25,16 @@ test('hud M11: segmentCount clamps outside 0..1', () => {
   assert.equal(segmentCount(140 / 140, 5), 5); // wood noise -> 5 segs
 });
 
-// --- roomLabels (pure, derived from level geometry) ---
+// M15: roomLabels() is GONE from render.js — the room labels were
+// removed from the playfield (declutter); the floor zones + the rail
+// legend carry the reading now. The not-drawn assertion lives in
+// tests/m15.test.js ('m15: room labels are not drawn on the play
+// frame'). The Job 2 hand-placed room labels are level DATA
+// (level.js), still covered by tests/m14.test.js.
 
-test('render M11: roomLabels returns one label per wing, in-wing', () => {
-  const labels = roomLabels(buildLevel());
-  assert.deepEqual(labels.map((l) => l.text), ['FOYER', 'AUDITORIUM', 'BACKSTAGE']);
-  const [foyer, aud, back] = labels;
-  assert.ok(foyer.x < 380, 'FOYER west of curtain A');
-  assert.ok(aud.x >= 380 && aud.x < 720, 'AUDITORIUM between curtain A and crate');
-  assert.ok(back.x >= 720, 'BACKSTAGE east of the crate');
-  // Regression: the first screenshot pass caught FOYER at y=72 hidden
-  // under the HUD header panel (y8..64 after the HUD-fix) during play.
-  assert.ok(foyer.y > 92, 'FOYER below the HUD header panel');
-  for (const l of labels) {
-    assert.ok(l.x > 0 && l.x < CONFIG.VIEW_WIDTH, 'label inside canvas x');
-    assert.ok(l.y > 0 && l.y < CONFIG.VIEW_HEIGHT, 'label inside canvas y');
-  }
-});
-
-// --- hudPanelRects (pure layout) ---
-
-function overlaps(a, b) {
-  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-}
-
-test('hud M11: panels fit the canvas, clear the EXIT, do not overlap', () => {
-  const panels = hudPanelRects();
-  const exit = { x: 860, y: 40, w: 60, h: 60 };
-  for (const p of Object.values(panels)) {
-    assert.ok(p.x >= 0 && p.y >= 0, 'panel inside canvas (top-left)');
-    assert.ok(p.x + p.w <= CONFIG.VIEW_WIDTH, 'panel inside canvas (right)');
-    assert.ok(p.y + p.h <= CONFIG.VIEW_HEIGHT, 'panel inside canvas (bottom)');
-    assert.ok(!overlaps(p, exit), 'panel clears the EXIT box');
-  }
-  // HUD-fix: the noise panel is gone — the legend/roster/SOUND live
-  // in the bottom bar now (panels.header vs panels.bottom).
-  assert.ok(!overlaps(panels.header, panels.bottom), 'panels do not overlap each other');
-});
+// M15: hudPanelRects() is GONE — the header + bottom bar were
+// deleted, and the rail is the only HUD panel (railRect, covered by
+// tests/hudfix.test.js). No replacement test belongs here.
 
 // --- mock canvas: records every draw call ---
 
@@ -114,32 +84,33 @@ function textsOf(ctx, name = 'fillText') {
   return ctx.calls.filter((c) => c[0] === name).map((c) => c[1]);
 }
 
-test('render M11: play frame draws panels, gradients, room labels', () => {
+test('render M11: play frame draws the rail, gradients, no room labels', () => {
   const ctx = new MockCtx();
   const { world, screen } = applyShot('play');
   render(ctx, world, screen, 0, false);
 
-  // Framed HUD: panel A rect drawn (fill, not just the old flat strip).
+  // Framed HUD: the rail slab (960,0,240,600) drawn; the header +
+  // bottom bar are gone (M15).
   const rects = ctx.calls.filter((c) => c[0] === 'fillRect');
-  // HUD-fix: header is 2 rows in 56px now (was 4 rows in 84px); the
-  // noise panel (560,104,392,22) is gone, replaced by the bottom bar.
-  assert.ok(rects.some((c) => c[1] === 8 && c[2] === 8 && c[3] === 836 && c[4] === 56),
-    'header panel rect (8,8,836,56) drawn');
-  assert.ok(rects.some((c) => c[1] === 8 && c[2] === 536 && c[3] === 744 && c[4] === 56),
-    'bottom panel rect (8,536,744,56) drawn');
+  assert.ok(rects.some((c) => c[1] === 960 && c[2] === 0 && c[3] === 240 && c[4] === 600),
+    'rail slab (960,0,240,600) drawn');
+  assert.ok(!rects.some((c) => c[1] === 8 && c[2] === 8 && c[3] === 836 && c[4] === 56),
+    'header panel NOT drawn');
+  assert.ok(!rects.some((c) => c[1] === 8 && c[2] === 536 && c[3] === 744 && c[4] === 56),
+    'bottom panel NOT drawn');
   // Panel borders stroked.
   assert.ok(ctx.calls.some((c) => c[0] === 'strokeRect'), 'panel border stroked');
 
-  // Gradients used: 3 light pools + 6 cones + exit glow + vignette.
+  // Gradients used: 3 light pools + 6 cones + exit glow + vignette
+  // (+ 2 sconce glows from the M15 edge dressing).
   const grads = ctx.calls.filter((c) => c[0] === 'createRadialGradient').length;
   assert.ok(grads >= 11, `radial gradients used (${grads}, want >= 11)`);
 
-  // Room labels drawn on the floor (node fallback draws the floor
-  // directly, so the labels are fillText calls here; in the browser
-  // they are baked into the cached floor layer).
+  // Room labels are NOT drawn on the floor anymore (M15 declutter);
+  // the rail title is still drawn.
   const texts = textsOf(ctx);
   for (const room of ['FOYER', 'AUDITORIUM', 'BACKSTAGE']) {
-    assert.ok(texts.includes(room), `room label ${room} drawn`);
+    assert.ok(!texts.includes(room), `room label ${room} NOT drawn`);
   }
   assert.ok(texts.includes('CURTAIN CALL'), 'HUD title drawn');
 });

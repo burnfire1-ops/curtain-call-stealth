@@ -16,7 +16,7 @@ import { transition } from '../game/src/screens.js';
 import { applyShot } from '../game/src/shots.js';
 import { render } from '../game/src/render.js';
 import {
-  hudPanelRects, minimapRect, overlayPanelRect, selectLayout,
+  railRect, minimapRect, overlayPanelRect, selectLayout,
   selectCardLines, selectHowtoLines, jobStatus, canSelectJob,
   campaignTotal, updateBest, jobAtPoint, panelTextFits, PANEL_TEXT_MARGIN,
   winScreenLines, loseScreenLines, propsSummary,
@@ -302,8 +302,8 @@ test('m14: laserOccluder thickens the beam by 4px on each side', () => {
 
 test('m14: labelOccluders builds the right list per screen', () => {
   const laser = { x1: 0, y1: 0, x2: 100, y2: 0 };
-  assert.equal(labelOccluders({ hud: true, lasers: [laser] }).length, 4,
-    'header + bottom + minimap + 1 laser');
+  assert.equal(labelOccluders({ hud: true, lasers: [laser] }).length, 2,
+    'rail + 1 laser (M15: the header + bottom + minimap panels are gone, the rail is the only HUD panel)');
   assert.equal(labelOccluders({ overlay: overlayPanelRect(5), lasers: [] }).length, 1);
   assert.equal(labelOccluders({}).length, 0);
 });
@@ -573,12 +573,15 @@ test('m14 render: select frame draws the job cards + howto panel, one straight l
   assert.ok(!texts.some((t) => t.startsWith('USHER 2')), 'USHER 2 label skipped (howto panel)');
   assert.ok(!texts.some((t) => t.startsWith('USHER 3')), 'USHER 3 label skipped (tagline zone)');
   assert.ok(!texts.includes('CAM 1'), 'CAM 1 label skipped (title zone)');
-  assert.ok(!texts.includes('THE GILDED SCRIPT'), 'Script label skipped (card 1)');
-  assert.ok(!texts.includes('THE SILVER BATON'), 'Baton label skipped (card 2)');
-  assert.ok(!texts.includes('THE VELVET ROSE'), 'Rose label skipped (card 2)');
+  // M15: prop name labels are GONE from the playfield entirely (the
+  // names live in the rail LOOT checklist) — not skipped by the box
+  // rule, simply never drawn.
+  assert.ok(!texts.includes('THE GILDED SCRIPT'), 'Script label removed from the playfield');
+  assert.ok(!texts.includes('THE SILVER BATON'), 'Baton label removed from the playfield');
+  assert.ok(!texts.includes('THE VELVET ROSE'), 'Rose label removed from the playfield');
   // The box rule on the frame itself: no drawn label touches a select
-  // panel, a laser, or the title/tagline text zones.
-  const occluders = [...L.cards, L.howto];
+  // panel, a laser, the rail, or the title/tagline text zones.
+  const occluders = [...L.cards, L.howto, railRect()];
   for (const l of world.lasers) occluders.push(laserOccluder(l));
   occluders.push(textBox('CURTAIN CALL', CONFIG.VIEW_WIDTH / 2, L.titleY,
     { width: measure('CURTAIN CALL', 44), ascent: 44, descent: 11 }));
@@ -587,28 +590,37 @@ test('m14 render: select frame draws the job cards + howto panel, one straight l
   assertNoLabelTouchesOccluder(ctx, occluders);
 });
 
-test('m14 render: Job 2 play frame — labels read, none touches a HUD panel or a laser', () => {
+test('m14 render: Job 2 play frame — calm staging, labels read, none touches the rail or a laser', () => {
   const ctx = new MockCtx();
   const { world, screen, campaign } = applyShot('play2');
   render(ctx, world, screen, 0, false, campaign);
   const texts = textsOf(ctx);
-  assert.ok(texts.includes('CURTAIN CALL'), 'HUD title drawn');
-  // USHER 1 reads (its label box sits well clear of the header);
-  // USHER 3 reads too — its box top is y=69, 5px below the header
-  // bottom edge (y=64), 3px clear of the 2px margin (GUARD_R 14,
-  // baseline y-20, ascent 11). USHER 2 reads at the staged search spot.
+  assert.ok(texts.includes('CURTAIN CALL'), 'rail title drawn');
+  // M15 calm staging: the player hides in the dark west of curtain A,
+  // USHER 2 searches the south hall, CAM 2 sweeps (not spotted), all
+  // lasers are down. No header hides anyone now, so all 4 ushers +
+  // all 3 cameras read (USHER 4 + CAM 1 were skipped under the old
+  // header; the box rule still applies — the rail + the beams).
   assert.ok(texts.some((t) => t.startsWith('USHER 1')), 'USHER 1 label shown');
-  assert.ok(texts.some((t) => t.startsWith('USHER 3')), 'USHER 3 label shown (box 5px below the header)');
   assert.ok(texts.some((t) => t.startsWith('USHER 2')), 'USHER 2 label shown');
+  assert.ok(texts.some((t) => t.startsWith('USHER 3')), 'USHER 3 label shown');
+  assert.ok(texts.some((t) => t.startsWith('USHER 4')), 'USHER 4 label shown (no header to hide it)');
+  assert.ok(texts.includes('CAM 1'), 'CAM 1 label shown (no header to hide it)');
   assert.ok(texts.includes('CAM 2'), 'CAM 2 label shown');
   assert.ok(texts.includes('CAM 3'), 'CAM 3 label shown');
-  assert.ok(texts.includes('THE GILDED SCRIPT'), 'Script label shown');
-  assert.ok(texts.includes('THE SILVER BATON'), 'Baton label shown');
-  assert.ok(texts.includes('THE VELVET ROSE'), 'Rose label shown');
-  assert.ok(!texts.some((t) => t.startsWith('USHER 4')), 'USHER 4 label skipped (header)');
-  assert.ok(!texts.includes('CAM 1'), 'CAM 1 label skipped (header)');
-  const panels = hudPanelRects();
-  const occluders = [panels.header, panels.bottom, minimapRect()];
+  // M15 declutter: prop names + room labels are gone from the
+  // playfield (names live in the rail LOOT checklist).
+  assert.ok(!texts.includes('THE GILDED SCRIPT'), 'Script label removed from the playfield');
+  assert.ok(!texts.includes('THE SILVER BATON'), 'Baton label removed from the playfield');
+  assert.ok(!texts.includes('THE VELVET ROSE'), 'Rose label removed from the playfield');
+  assert.ok(!texts.includes('GALLERY'), 'GALLERY room label removed from the playfield');
+  assert.ok(!texts.includes('WEST WING'), 'WEST WING room label removed from the playfield');
+  // The rail carries the game state: searching guard + patrol count +
+  // the GHOST goal line.
+  assert.ok(texts.some((t) => t.includes('U2 SEARCH 8t')), 'roster names the searching guard');
+  assert.ok(texts.some((t) => t.includes('3 PATROL')), 'roster collapses the calm guards');
+  assert.ok(texts.some((t) => t.includes('EXIT: OPEN · GHOST')), 'goal line reads GHOST');
+  const occluders = [railRect()];
   for (const l of world.lasers) occluders.push(laserOccluder(l));
   assertNoLabelTouchesOccluder(ctx, occluders);
 });
@@ -646,7 +658,7 @@ test('m14 render: Job 2 win frame — body left-aligned, closer centred, overlay
   assert.ok(texts.includes('CAM 1'), 'CAM 1 label shown');
   assert.ok(texts.includes('CAM 2'), 'CAM 2 label shown');
   assert.ok(texts.includes('CAM 3'), 'CAM 3 label shown');
-  const occluders = [overlayPanelRect(body.length + 1)];
+  const occluders = [overlayPanelRect(body.length + 1), railRect()];
   for (const l of world.lasers) occluders.push(laserOccluder(l));
   assertNoLabelTouchesOccluder(ctx, occluders);
 });

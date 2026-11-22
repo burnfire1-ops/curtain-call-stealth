@@ -4,6 +4,13 @@
 const CONFIG = {
   VIEW_WIDTH: 960,
   VIEW_HEIGHT: 600,
+  // M15: the canvas is 1200x600 — the 960-wide playfield (all world
+  // coordinates unchanged) plus a 240px rail on the right. RAIL_X is
+  // the rail's left edge (= VIEW_WIDTH). CANVAS_H == VIEW_HEIGHT.
+  CANVAS_W: 1200,
+  CANVAS_H: 600,
+  RAIL_W: 240,
+  RAIL_X: 960,
   TILE: 40,
   WALL: 20, // outer wall thickness (px)
 
