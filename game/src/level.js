@@ -38,39 +38,39 @@ export function buildLevel() {
     // 1 Foyer + 2 Auditorium + 2 Backstage + 1 top strip (M7). Patrol
     // routes never cross a cover (M2 debt: guards have no pathfinding,
     // only collision).
-    // M6: U2's west waypoint moved 420 -> 440 (420-14 overlapped curtain
-    // A, so the guard waited blocked forever); U2/U4 stagger — they
+    // M6: MIRA's west waypoint moved 420 -> 440 (420-14 overlapped curtain
+    // A, so the guard waited blocked forever); MIRA/SELMA stagger — they
     // start at their EAST waypoint facing west, so the patrols are not
     // one synchronized wave the player can outrun in a straight line.
-    // M7: U3 stagger REVERTED (parent decision — it broke the Foyer
-    // teach contract + the carpet-quiet test); U3 starts west again,
-    // facing east. USHER 6 added on the top strip (y=60, x 500-900)
+    // M7: OTTO stagger REVERTED (parent decision — it broke the Foyer
+    // teach contract + the carpet-quiet test); OTTO starts west again,
+    // facing east. PETRA added on the top strip (y=60, x 500-900)
     // to close the top-wall highway (M6 §4.2): a player hugging the
-    // top wall now meets a horizontal cone on the same strip. U6
-    // starts west facing east, like U1/U5.
+    // top wall now meets a horizontal cone on the same strip. PETRA
+    // starts west facing east, like CORVIN/IVO.
     guards: [
       {
-        name: 'USHER 1', x: 140, y: 300,
+        name: 'CORVIN', x: 140, y: 300,
         waypoints: [{ x: 140, y: 300 }, { x: 360, y: 300 }],
       },
       {
-        name: 'USHER 2', x: 620, y: 120, dir: { x: -1, y: 0 },
+        name: 'MIRA', x: 620, y: 120, dir: { x: -1, y: 0 },
         waypoints: [{ x: 440, y: 120 }, { x: 620, y: 120 }],
       },
       {
-        name: 'USHER 3', x: 420, y: 520,
+        name: 'OTTO', x: 420, y: 520,
         waypoints: [{ x: 420, y: 520 }, { x: 620, y: 520 }],
       },
       {
-        name: 'USHER 4', x: 900, y: 200, dir: { x: -1, y: 0 },
+        name: 'SELMA', x: 900, y: 200, dir: { x: -1, y: 0 },
         waypoints: [{ x: 720, y: 200 }, { x: 900, y: 200 }],
       },
       {
-        name: 'USHER 5', x: 720, y: 380,
+        name: 'IVO', x: 720, y: 380,
         waypoints: [{ x: 720, y: 380 }, { x: 900, y: 380 }],
       },
       {
-        name: 'USHER 6', x: 500, y: 60,
+        name: 'PETRA', x: 500, y: 60,
         waypoints: [{ x: 500, y: 60 }, { x: 900, y: 60 }],
       },
     ],
@@ -79,7 +79,7 @@ export function buildLevel() {
     // crate + curtains block their cones like they block guards).
     // CAM 1 on the north wall by the stage (base south, sweeps the
     // Golden Mask + stage pool); CAM 2 on the east wall in Backstage
-    // (base west, sweeps the vault corridor between U4/U5). Neither
+    // (base west, sweeps the vault corridor between SELMA/IVO). Neither
     // cone reaches the Probe T route (top wall y=32 / wait point
     // (200,170)) — the timed win stays winnable.
     cameras: [
@@ -92,7 +92,7 @@ export function buildLevel() {
     // side), so the timed win stays winnable; both are bypassable —
     // LASER 1 by crossing west of x=660, LASER 2 by crossing north
     // of y=160 or south of y=280).
-    // LASER 1: across the vault corridor between U4 (y=200) and U5
+    // LASER 1: across the vault corridor between SELMA (y=200) and IVO
     // (y=380) — the east crossing to the Violin. LASER 2: vertical
     // gate in the Auditorium, on the eastward path from the Foyer —
     // it guards the direct route without touching the Mask approach
@@ -134,7 +134,7 @@ export function buildLevel() {
 // tiara alcove in Job 1. The golden path (Probe T2) hugs the west and
 // south walls, where no camera cone and no laser beam reaches — the
 // timed win stays winnable. The top strip is closed the same way as
-// Job 1 (USHER 4 patrols y=60), so the naive Probe A loses there too.
+// Job 1 (PETRA patrols y=60), so the naive Probe A loses there too.
 // Level-design: teach (north gallery, one vertical guard) -> pressure
 // (middle hall, crossing guard + 2 lasers) -> rest (west passage, no
 // patrol) -> climax (exit approach, camera 2 + laser 3 + guard 3).
@@ -171,19 +171,19 @@ export function buildLevel2() {
     // G1/G3 start north facing south.
     guards: [
       {
-        name: 'USHER 1', x: 300, y: 120, dir: { x: 0, y: 1 },
+        name: 'ALBA', x: 300, y: 120, dir: { x: 0, y: 1 },
         waypoints: [{ x: 300, y: 120 }, { x: 300, y: 480 }],
       },
       {
-        name: 'USHER 2', x: 740, y: 300, dir: { x: -1, y: 0 },
+        name: 'DORIN', x: 740, y: 300, dir: { x: -1, y: 0 },
         waypoints: [{ x: 420, y: 300 }, { x: 740, y: 300 }],
       },
       {
-        name: 'USHER 3', x: 700, y: 100, dir: { x: 0, y: 1 },
+        name: 'ELIF', x: 700, y: 100, dir: { x: 0, y: 1 },
         waypoints: [{ x: 700, y: 100 }, { x: 700, y: 460 }],
       },
       {
-        name: 'USHER 4', x: 880, y: 60, dir: { x: -1, y: 0 },
+        name: 'NERO', x: 880, y: 60, dir: { x: -1, y: 0 },
         waypoints: [{ x: 500, y: 60 }, { x: 880, y: 60 }],
       },
     ],
@@ -232,13 +232,124 @@ export function buildLevel2() {
   };
 }
 
+// M16 — JOB 3: THE VAULT AT MIDNIGHT. Camera+laser focus (5 guards,
+// 3 cameras, 3 lasers), a mirror-diagonal flow Job 1/2 never used:
+// spawn bottom-right, exit top-left. The golden path (Probe T3) goes
+// up the east edge for the Key, west across the north hall past CAM 1,
+// around the west end of the double-laser corridor for the Ledger,
+// south and west along the bottom for the Crown, then north up the
+// west wall to the exit — every leg times a patrol or a camera sweep.
+// VERA x=700 (not 820 — the Key alcove wall W2 blocks x=820);
+// ODETTE x=560 (not 500 — the crate at x460..520 blocks x=500);
+// the crate sits at y400..460 so NOOR's y=480 route clears it by
+// 20px. The 'stage' pool id is the wood floor rect drawFloor() needs.
+export function buildLevel3() {
+  return {
+    name: 'THE VAULT AT MIDNIGHT',
+    spawn: { x: 880, y: 520 },
+    exit: { x: 80, y: 40, w: 60, h: 60 }, // stage door, top-left
+    walls: [
+      { x: 0, y: 0, w: W, h: T }, // top
+      { x: 0, y: H - T, w: W, h: T }, // bottom
+      { x: 0, y: 0, w: T, h: H }, // left
+      { x: W - T, y: 0, w: T, h: H }, // right
+      { x: 20, y: 180, w: 140, h: 20 }, // pocket wall: Crown alcove, entered from the east
+      { x: 800, y: 180, w: 140, h: 20 }, // pocket wall: Key alcove, entered from the west
+    ],
+    covers: [
+      { kind: 'curtain', x: 340, y: 80, w: 40, h: 140 }, // curtain A, north hall
+      { kind: 'curtain', x: 760, y: 200, w: 40, h: 160 }, // curtain B, east wing
+      { kind: 'crate', x: 460, y: 400, w: 60, h: 60 }, // prop crate, south hall
+    ],
+    props: [
+      { id: 'key', name: 'Obsidian Key', x: 880, y: 90, taken: false },
+      { id: 'ledger', name: 'Jade Ledger', x: 520, y: 300, taken: false },
+      { id: 'crown', name: 'Midnight Crown', x: 90, y: 90, taken: false },
+    ],
+    // Patrol routes never cross a cover. VERA vertical x=700 (north
+    // hall teach); LUKA horizontal y=300 (the Ledger sits ON his
+    // route — grab it in the gap); ODETTE vertical x=560 (middle
+    // hall); BASIL horizontal y=60 (top strip — closes the top-wall
+    // highway); NOOR horizontal y=480 (bottom strip — closes the
+    // bottom-wall highway). LUKA/BASIL start at their EAST waypoint
+    // facing west (the M6 stagger), VERA/ODETTE start north facing
+    // south, NOOR starts west facing east.
+    guards: [
+      {
+        name: 'VERA', x: 700, y: 120, dir: { x: 0, y: 1 },
+        waypoints: [{ x: 700, y: 120 }, { x: 700, y: 480 }],
+      },
+      {
+        name: 'LUKA', x: 740, y: 300, dir: { x: -1, y: 0 },
+        waypoints: [{ x: 420, y: 300 }, { x: 740, y: 300 }],
+      },
+      {
+        name: 'ODETTE', x: 560, y: 100, dir: { x: 0, y: 1 },
+        waypoints: [{ x: 560, y: 100 }, { x: 560, y: 460 }],
+      },
+      {
+        name: 'BASIL', x: 880, y: 60, dir: { x: -1, y: 0 },
+        waypoints: [{ x: 300, y: 60 }, { x: 880, y: 60 }],
+      },
+      {
+        name: 'NOOR', x: 200, y: 480, dir: { x: 1, y: 0 },
+        waypoints: [{ x: 200, y: 480 }, { x: 600, y: 480 }],
+      },
+    ],
+    // CAM 1 on the north wall (base south, sweeps the north hall —
+    // the Key-to-Ledger crossing times its sweep); CAM 2 on the east
+    // wall (base west, sweeps the Key approach — a player due east of
+    // it is never in its cone); CAM 3 on the north wall (base south,
+    // sweeps the exit approach — its sweep extreme is 0.817 vs the
+    // cone's cos35 0.819, so the exit timing window is real).
+    cameras: [
+      { name: 'CAM 1', x: 480, y: 60, baseAngleDeg: 90 },
+      { name: 'CAM 2', x: 900, y: 300, baseAngleDeg: 180 },
+      { name: 'CAM 3', x: 300, y: 60, baseAngleDeg: 90 },
+    ],
+    // L1+L2: the double-laser corridor (y=200 and y=280, x380..700) —
+    // the direct Key-to-Ledger route crosses both; the golden path
+    // goes around the west end (x<380), like Job 1's LASER 1 bypass.
+    // L3: vertical gate on the west passage (x=240, y160..420) — the
+    // north leg runs at x~172, 68px clear; the Crown-to-exit leg
+    // crosses it only south of y=420.
+    lasers: [
+      { name: 'LASER 1', x1: 380, y1: 200, x2: 700, y2: 200 },
+      { name: 'LASER 2', x1: 380, y1: 280, x2: 700, y2: 280 },
+      { name: 'LASER 3', x1: 240, y1: 160, x2: 240, y2: 420 },
+    ],
+    lightPools: [
+      { id: 'stage', x: 400, y: 40, w: 200, h: 100 }, // north hall pool, wood + Key approach
+      { id: 'hall', x: 600, y: 240, w: 180, h: 120 }, // middle hall pool
+      { id: 'exit', x: 40, y: 20, w: 160, h: 100 }, // exit pool, around the door
+    ],
+    carpetZones: [
+      { x: 400, y: 320, w: 260, h: 240 }, // south hall seats
+      { x: 120, y: 420, w: 200, h: 120 }, // west passage runner
+    ],
+    beats: [
+      { room: 'vault-antechamber', type: 'teach', intensity: 0.1 },
+      { room: 'double-laser-corridor', type: 'pressure', intensity: 0.6 },
+      { room: 'west-passage', type: 'rest', intensity: 0.1 },
+      { room: 'exit-approach', type: 'climax', intensity: 1.0 },
+    ],
+    // Only two room labels (same reason as Job 2: a third label
+    // straddles a panel at every candidate position).
+    roomLabels: [
+      { text: 'VAULT', x: 700, y: 500 },
+      { text: 'NORTH HALL', x: 620, y: 130 },
+    ],
+  };
+}
+
 // Static level data, shared by the queries below (single source of truth).
 const LEVEL = buildLevel();
 const LEVEL2 = buildLevel2();
+const LEVEL3 = buildLevel3();
 
 // M14: the campaign levels, in job order — Job 1 is LEVELS[0], Job 2
 // is LEVELS[1]. world.js builds a world from LEVELS[jobIndex].
-export const LEVELS = [LEVEL, LEVEL2];
+export const LEVELS = [LEVEL, LEVEL2, LEVEL3];
 
 function inRect(x, y, r) {
   return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;

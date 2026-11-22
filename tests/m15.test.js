@@ -108,7 +108,7 @@ test('m15: all HUD text lives in the rail — no HUD text over the playfield', (
   render(ctx, world, screen, 0, false);
   const railStrings = [
     'CURTAIN CALL', 'JOB 1 ·', 'SCORE ', 'OBJECTIVE', 'Steal back',
-    'Reach the EXIT', 'VISIBILITY', 'NOISE', 'LOOT', 'USHERS', 'LEGEND',
+    'Reach the EXIT', 'VISIBILITY', 'NOISE', 'LOOT', 'GUARDS', 'LEGEND',
     'WASD', 'IN THE LIGHT', 'IN THE DARK', 'silent', 'quiet on carpet',
     'loud on wood', 'Props ', 'EXIT: OPEN',
   ];
@@ -122,7 +122,7 @@ test('m15: all HUD text lives in the rail — no HUD text over the playfield', (
   // …and the rail strings ARE drawn, inside the rail.
   const railTexts = ctx.calls.filter((c) => c[0] === 'fillText' && c[2] >= 960)
     .map((c) => c[1]);
-  for (const s of ['CURTAIN CALL', 'OBJECTIVE', 'VISIBILITY', 'USHERS', 'LEGEND']) {
+  for (const s of ['CURTAIN CALL', 'OBJECTIVE', 'VISIBILITY', 'GUARDS', 'LEGEND']) {
     assert.ok(railTexts.some((t) => t.includes(s)), `"${s}" drawn in the rail`);
   }
 });
@@ -190,10 +190,10 @@ test('m15: PATROL usher labels are dim, alert usher labels are full strength', (
   render(ctx, world, screen, 0, false);
   const alphas = alphaAtTexts(ctx);
   const at = (text) => alphas.filter(([t]) => t === text).map(([, a]) => a);
-  assert.deepEqual(at('USHER 1 · PATROL'), [0.45], 'PATROL label dim');
-  assert.deepEqual(at('USHER 3 · PATROL'), [0.45], 'PATROL label dim');
-  assert.deepEqual(at('USHER 6 · PATROL'), [0.45], 'PATROL label dim');
-  assert.deepEqual(at('USHER 2 · SEARCH'), [1], 'SEARCH label full strength');
+  assert.deepEqual(at('CORVIN · PATROL'), [0.45], 'PATROL label dim');
+  assert.deepEqual(at('OTTO · PATROL'), [0.45], 'PATROL label dim');
+  assert.deepEqual(at('PETRA · PATROL'), [0.45], 'PATROL label dim');
+  assert.deepEqual(at('MIRA · SEARCH'), [1], 'SEARCH label full strength');
 });
 
 test('m15: "?" marks a SUSPICIOUS guard, "!" only a chase', () => {
@@ -234,7 +234,7 @@ test('m15: the play2 shot is staged calm — no coin ring, no smoke, no live las
 
 test('m15: the chase2 alarm frame is honest — a chase means a detection', () => {
   // M14 nit, fixed in M15: the frozen alarm frame showed
-  // "EXIT: OPEN · GHOST" while USHER 3 chased — but a chase only
+  // "EXIT: OPEN · GHOST" while OTTO chased — but a chase only
   // happens after a detection (world.js counts detections on chase
   // entry), so the rail must read SPOTTED ×1 and the live score must
   // have lost the GHOST bonus (200 = time bonus only, t=0).

@@ -25,7 +25,7 @@ test('level: 3 wings, 6 ushers, 3 props, exit, spawn', () => {
   assert.equal(level.guards.length, 6);
   assert.deepEqual(
     level.guards.map((g) => g.name),
-    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5', 'USHER 6'],
+    ['CORVIN', 'MIRA', 'OTTO', 'SELMA', 'IVO', 'PETRA'],
   );
   assert.equal(level.props.length, 3);
   assert.deepEqual(level.props.map((p) => p.id), ['tiara', 'mask', 'violin']);
@@ -104,7 +104,7 @@ test('world: 6 guards with names, guard alias kept for M1/M2 callers', () => {
   assert.equal(w.guards.length, 6);
   assert.deepEqual(
     w.guards.map((g) => g.name),
-    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5', 'USHER 6'],
+    ['CORVIN', 'MIRA', 'OTTO', 'SELMA', 'IVO', 'PETRA'],
   );
   assert.equal(w.guard, w.guards[0]);
   assert.equal(w.props.length, 3);

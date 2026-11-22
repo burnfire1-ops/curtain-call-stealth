@@ -6,6 +6,7 @@
 // scrollbar) and 0 console errors on every shot.
 // Expects Chrome on --remote-debugging-port=9223 and game/ served on
 // 127.0.0.1:8124. Usage: node prototypes/m13/cdp-shots.mjs <outdir>
+// M16: shot list is select / play3 / end3 / chase3 (Job 3 frames).
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
@@ -79,16 +80,16 @@ const fit = await evalJs(`JSON.stringify({ sw: document.documentElement.scrollWi
 log.push('page fit (expect sw=1200 sh=600): ' + fit);
 await shot('1-select.png');
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=play2' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=play3' });
 await sleep(800);
 log.push('play state: ' + (await evalJs(`(() => { const w = window.__curtainCall; return w ? 'live-mode (unexpected)' : 'frozen shot frame'; })()`)));
 await shot('2-play.png');
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=end2' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=end3' });
 await sleep(800);
 await shot('3-end.png');
 
-await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=chase2' });
+await send('Page.navigate', { url: 'http://127.0.0.1:8124/index.html?shot=chase3' });
 await sleep(800);
 await shot('4-alarm.png');
 

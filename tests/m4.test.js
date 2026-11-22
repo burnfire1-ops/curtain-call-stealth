@@ -140,11 +140,12 @@ test('screens: R restarts from play, paused, win and lose; Enter goes NEXT JOB /
   assert.deepEqual(transition('paused', 'KeyR'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('win', 'KeyR'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('lose', 'KeyR'), { screen: 'play', action: 'restart' });
-  // M14: Enter on a Job 1 win goes straight to Job 2 (NEXT JOB); on a
-  // Job 2 win it goes back to the title; on a loss it restarts the job.
+  // M14/M16: Enter on a non-last win goes NEXT JOB; only the last
+  // job (Job 3) goes back to the title; on a loss it restarts the job.
   assert.deepEqual(transition('win', 'Enter'), { screen: 'play', action: 'next' });
   assert.deepEqual(transition('win', 'Enter', { jobIndex: 0 }), { screen: 'play', action: 'next' });
-  assert.deepEqual(transition('win', 'Enter', { jobIndex: 1 }), { screen: 'select', action: 'title' });
+  assert.deepEqual(transition('win', 'Enter', { jobIndex: 1 }), { screen: 'play', action: 'next' });
+  assert.deepEqual(transition('win', 'Enter', { jobIndex: 2 }), { screen: 'select', action: 'title' });
   assert.deepEqual(transition('lose', 'Enter'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('lose', 'Enter', { jobIndex: 1 }), { screen: 'play', action: 'restart' });
   // Enter on play/paused is not a restart (movement keys only).
@@ -238,7 +239,7 @@ test('feel: shake offset is bounded and zero when there is no trauma', () => {
 test('world: detections counts each chase entry once, not every frame in chase', () => {
   const world = createWorld();
   world.player.x = 350;
-  world.player.y = 300; // inside USHER 1's lit cone
+  world.player.y = 300; // inside CORVIN's lit cone
   stepN(world, IDLE, 1.0);
   assert.equal(world.guards[0].state, 'chase');
   assert.equal(world.detections, 1, 'first chase entry counts once');
@@ -276,7 +277,7 @@ test('world: being caught names the catching usher and shakes', () => {
   // Wait (simulated) until the chasing guard touches the idle player.
   for (let i = 0; i < 200 && world.status === 'playing'; i++) step(world, IDLE, 0.05);
   assert.equal(world.status, 'lost');
-  assert.equal(world.caughtBy, 'USHER 1');
+  assert.equal(world.caughtBy, 'CORVIN');
   assert.ok(world.feel.shake > 0, 'caught must shake');
 });
 

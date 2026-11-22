@@ -11,7 +11,7 @@ import { transition } from './screens.js';
 import { createAudio } from './audio.js';
 import { drainAudio } from './feel.js';
 import { floorAt } from './level.js';
-import { scoreBreakdown, updateBest, jobAtPoint } from './hud.js';
+import { scoreBreakdown, updateBest, jobAtPoint, starsForJob } from './hud.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -27,7 +27,8 @@ const shot = params.get('shot');
 
 // Shot mode: one frozen deterministic frame, no animation loop.
 if (shot === 'select' || shot === 'start' || shot === 'play' || shot === 'play2'
-  || shot === 'end' || shot === 'end2' || shot === 'chase' || shot === 'chase2'
+  || shot === 'play3' || shot === 'end' || shot === 'end2' || shot === 'end3'
+  || shot === 'chase' || shot === 'chase2' || shot === 'chase3'
   || shot === 'foyer' || shot === 'auditorium' || shot === 'backstage') {
   const { world, screen, campaign } = applyShot(shot);
   render(ctx, world, screen, 0, false, campaign);
@@ -36,7 +37,7 @@ if (shot === 'select' || shot === 'start' || shot === 'play' || shot === 'play2'
   // selected card, which jobs are cleared, and the best score/time per
   // job. `world` is the live game world while playing, and the select
   // backdrop world (the selected job's level) while on the title.
-  let campaign = { selected: 0, cleared: [false, false], best: [null, null] };
+  let campaign = { selected: 0, cleared: [false, false, false], best: [null, null, null] };
   let world = createWorld(0);
   let screen = 'select'; // 'select' | 'play' | 'paused' | 'win' | 'lose'
   const input = createInput(canvas); // M12: canvas passed for mouse aim
@@ -74,7 +75,10 @@ if (shot === 'select' || shot === 'start' || shot === 'play' || shot === 'play2'
     const job = world.jobIndex;
     campaign.cleared[job] = true;
     const s = scoreBreakdown(world);
-    campaign.best[job] = updateBest(campaign.best[job], s.total, world.time);
+    const taken = world.props.filter((p) => p.taken).length;
+    const stars = starsForJob(world.detections, taken, world.props.length,
+      world.time, CONFIG.PAR_S[job]);
+    campaign.best[job] = updateBest(campaign.best[job], s.total, world.time, stars);
   }
 
   // AudioContext is created LAZY on the first user gesture (M4: a
@@ -105,7 +109,7 @@ if (shot === 'select' || shot === 'start' || shot === 'play' || shot === 'play2'
     tReal += dt;
 
     // Screen flow (screens.js): one key per frame, first match wins.
-    for (const key of ['Enter', 'KeyR', 'KeyP', 'Digit1', 'Digit2']) {
+    for (const key of ['Enter', 'KeyR', 'KeyP', 'Digit1', 'Digit2', 'Digit3']) {
       if (input.wasPressed(key)) {
         const result = transition(screen, key, {
           selected: campaign.selected,

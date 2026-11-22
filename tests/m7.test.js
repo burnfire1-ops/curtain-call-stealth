@@ -28,16 +28,16 @@ function circleHitsRect(cx, cy, r, rect) {
 
 // --- decision 2: USHER 6 guards the top strip ---
 
-test('m7: level has 6 ushers incl. USHER 6 on the top strip (y=60, x 500-900)', () => {
+test('m7: level has 6 named guards incl. PETRA on the top strip (y=60, x 500-900)', () => {
   const level = buildLevel();
   assert.equal(level.guards.length, 6);
   assert.deepEqual(
     level.guards.map((g) => g.name),
-    ['USHER 1', 'USHER 2', 'USHER 3', 'USHER 4', 'USHER 5', 'USHER 6'],
+    ['CORVIN', 'MIRA', 'OTTO', 'SELMA', 'IVO', 'PETRA'],
   );
   const u6 = level.guards[5];
   assert.deepEqual(u6.waypoints, [{ x: 500, y: 60 }, { x: 900, y: 60 }]);
-  // West starter like U1/U5: starts at the west waypoint, facing east.
+  // West starter like CORVIN/IVO: starts at the west waypoint, facing east.
   assert.equal(u6.x, 500, 'USHER 6 must start at its west waypoint');
   assert.equal(u6.y, 60);
   // No dir override in the spec — createGuard's default east applies.

@@ -71,9 +71,9 @@ test('hudfix: rail + minimap fit the canvas, clear the EXIT, and the minimap sit
 // --- labelInsideHud (pure) ---
 
 test('hudfix: labelInsideHud hides anchors inside the rail, shows the rest', () => {
-  assert.equal(labelInsideHud(700, 40), false, 'USHER 6 label anchor is clear now (no header)');
+  assert.equal(labelInsideHud(700, 40), false, 'PETRA label anchor is clear now (no header)');
   assert.equal(labelInsideHud(520, 60), false, 'CAM 1 mount is clear now (no header)');
-  assert.equal(labelInsideHud(520, 100), false, 'USHER 2 label anchor is clear now');
+  assert.equal(labelInsideHud(520, 100), false, 'MIRA label anchor is clear now');
   assert.equal(labelInsideHud(400, 560), false, 'open floor is clear now (no bottom bar)');
   assert.equal(labelInsideHud(880, 522), false, 'Violin label anchor is clear now (no playfield minimap)');
   assert.equal(labelInsideHud(900, 300), false, 'CAM 2 mount is clear');
@@ -87,19 +87,19 @@ test('hudfix: labelInsideHud hides anchors inside the rail, shows the rest', () 
 
 test('hudfix: railRosterLines — alerted guards named with distances, patrols collapse, capped at 5', () => {
   const { world } = applyShot('play');
-  // Job 1 play shot: U2 SEARCH (2t from the player), CAM 1 SPOTTED,
+  // Job 1 play shot: MIRA SEARCH (2t from the player), CAM 1 SPOTTED,
   // CAM 2 SWEEP, 5 PATROL — 4 lines, under the cap.
   assert.deepEqual(railRosterLines(world),
-    ['U2 SEARCH 2t', 'C1 SPOTTED', 'C2 SWEEP', '5 PATROL']);
+    ['MIRA SEARCH 2t', 'C1 SPOTTED', 'C2 SWEEP', '5 PATROL']);
   const { world: w2 } = applyShot('play2');
-  // Job 2 calm shot: U2 SEARCH 8t, 3 cameras sweeping, 3 PATROL — 5 lines, at the cap.
+  // Job 2 calm shot: DORIN SEARCH 8t, 3 cameras sweeping, 3 PATROL — 5 lines, at the cap.
   assert.deepEqual(railRosterLines(w2),
-    ['U2 SEARCH 8t', 'C1 SWEEP', 'C2 SWEEP', 'C3 SWEEP', '3 PATROL']);
+    ['DORIN SEARCH 8t', 'C1 SWEEP', 'C2 SWEEP', 'C3 SWEEP', '3 PATROL']);
   // 6 simultaneous alerts + 3 cameras overflow the cap: first 4 + a count.
   const crowded = {
     player: { x: 100, y: 100 },
     guards: [1, 2, 3, 4, 5, 6].map((n) => (
-      { name: `USHER ${n}`, state: 'suspicious', x: 100 + n * 50, y: 300 })),
+      { name: ['CORVIN', 'MIRA', 'OTTO', 'SELMA', 'IVO', 'PETRA'][n - 1], state: 'suspicious', x: 100 + n * 50, y: 300 })),
     cameras: [
       { name: 'CAM 1', state: 'sweep' },
       { name: 'CAM 2', state: 'sweep' },
@@ -150,19 +150,19 @@ test('hudfix: play-shot roster fits at full detail', () => {
   const { world } = applyShot('play');
   const line = buildRosterLine(guardStates(world.guards), world.player,
     propsSummary(world.props), world.detections, ROSTER_WIDTH, measure);
-  assert.match(line, /U2 SEARCH 2t/, 'full distances kept when they fit');
+  assert.match(line, /MIRA SEARCH 2t/, 'full distances kept when they fit');
   assert.ok(measure(line) <= ROSTER_WIDTH, `roster fits (${measure(line)}px <= ${ROSTER_WIDTH})`);
 });
 
 test('hudfix: roster degrades one level at a time as the width narrows', () => {
   const { world } = applyShot('play');
   const states = [
-    { name: 'USHER 1', state: 'chase', x: 420, y: 300 },
-    { name: 'USHER 2', state: 'search', x: 560, y: 210 },
-    { name: 'USHER 3', state: 'chase', x: 500, y: 520 },
-    { name: 'USHER 4', state: 'suspicious', x: 700, y: 200 },
-    { name: 'USHER 5', state: 'patrol', x: 800, y: 380 },
-    { name: 'USHER 6', state: 'patrol', x: 600, y: 60 },
+    { name: 'CORVIN', state: 'chase', x: 420, y: 300 },
+    { name: 'MIRA', state: 'search', x: 560, y: 210 },
+    { name: 'OTTO', state: 'chase', x: 500, y: 520 },
+    { name: 'SELMA', state: 'suspicious', x: 700, y: 200 },
+    { name: 'IVO', state: 'patrol', x: 800, y: 380 },
+    { name: 'PETRA', state: 'patrol', x: 600, y: 60 },
   ];
   const player = { x: 500, y: 230 };
   const summary = propsSummary(world.props);
@@ -193,11 +193,11 @@ test('hudfix: 6 simultaneous alerts compress to a count and still fit', () => {
   // of roster) overflow even the short-checklist level, so the
   // alert-count level must fire.
   const states = [1, 2, 3, 4, 5, 6].map((n) => (
-    { name: `USHER ${n}`, state: 'suspicious', x: 100 + n * 50, y: 300 }));
+    { name: ['CORVIN', 'MIRA', 'OTTO', 'SELMA', 'IVO', 'PETRA'][n - 1], state: 'suspicious', x: 100 + n * 50, y: 300 }));
   const line = buildRosterLine(states, world.player,
     propsSummary(world.props), world.detections, ROSTER_WIDTH, measure);
   assert.match(line, /6 ALERT/, 'all six collapse to a count');
-  assert.doesNotMatch(line, /U1 SUSPICIOUS/, 'no per-guard names at the compressed level');
+  assert.doesNotMatch(line, /CORVIN SUSPICIOUS/, 'no per-guard names at the compressed level');
   assert.ok(measure(line) <= ROSTER_WIDTH, `compressed roster fits (${measure(line)}px)`);
 });
 
@@ -320,8 +320,8 @@ test('render hudfix: play frame — rail rows at the new baselines, labels read,
   assert.ok(atY(178).includes('VISIBILITY'), 'visibility row (178)');
   assert.ok(atY(196).includes('NOISE'), 'noise row (196)');
   assert.ok(atY(232).some((t) => t.startsWith('LOOT · Props 0/3')), 'loot header (232)');
-  assert.ok(atY(296).includes('USHERS'), 'ushers header (296)');
-  assert.ok(atY(312).some((t) => t.includes('U2 SEARCH 2t')), 'roster line 1 (312)');
+  assert.ok(atY(296).includes('GUARDS'), 'guards header (296)');
+  assert.ok(atY(312).some((t) => t.includes('MIRA SEARCH 2t')), 'roster line 1 (312)');
   assert.ok(atY(384).some((t) => t.includes('EXIT: OPEN · GHOST')), 'goal row (384)');
   assert.ok(atY(404).includes('LEGEND'), 'legend header (404)');
   assert.ok(atY(468).some((t) => t.startsWith('WASD move')), 'controls row 1 (468)');
@@ -332,8 +332,8 @@ test('render hudfix: play frame — rail rows at the new baselines, labels read,
   // CAM 1 read. CAM 2's label is STILL skipped: LASER 1 (y=290)
   // crosses its text box (the M14 CAM 2 defect, unchanged) — the
   // rail roster ('C2 SWEEP') still names the camera.
-  for (let n = 1; n <= 6; n++) {
-    assert.ok(texts.some((t) => t.startsWith(`USHER ${n}`)), `USHER ${n} label shown`);
+  for (const name of ['CORVIN', 'MIRA', 'OTTO', 'SELMA', 'IVO', 'PETRA']) {
+    assert.ok(texts.some((t) => t.startsWith(name)), `${name} label shown`);
   }
   assert.ok(texts.includes('CAM 1'), 'CAM 1 label shown');
   assert.ok(!texts.includes('CAM 2'), 'CAM 2 label skipped — LASER 1 crosses its text');
@@ -353,8 +353,8 @@ test('render hudfix: alarm frame — ALARM stage pill + roster, no text overflow
   render(ctx, world, screen, 0, false);
   const texts = textsOf(ctx);
   assert.ok(texts.includes('ALARM'), 'alarm stage pill drawn');
-  assert.ok(texts.some((t) => t.includes('U1 CHASE 2t')), 'chase roster line in the rail');
-  assert.ok(texts.some((t) => t.startsWith('USHER 6')), 'USHER 6 label shown in alarm too');
+  assert.ok(texts.some((t) => t.includes('CORVIN CHASE 2t')), 'chase roster line in the rail');
+  assert.ok(texts.some((t) => t.startsWith('PETRA')), 'PETRA label shown in alarm too');
   assertNoTextOverflowsPanel(ctx);
 });
 

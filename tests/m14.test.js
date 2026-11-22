@@ -37,19 +37,25 @@ const freshCampaign = () => ({ selected: 0, cleared: [false, false], best: [null
 
 // --- Job 2 level data ---
 
-test('m14: LEVELS has 2 jobs — Job 1 unchanged, Job 2 surveillance-heavy', () => {
-  assert.equal(LEVELS.length, 2);
+test('m14: LEVELS has 3 jobs — Job 1 unchanged, Job 2 surveillance-heavy, Job 3 camera+laser (M16)', () => {
+  assert.equal(LEVELS.length, 3);
   assert.equal(LEVELS[0].name, 'THE MIDNIGHT THEATRE');
   assert.equal(LEVELS[1].name, 'THE GALLERY AFTER DARK');
-  assert.equal(LEVELS[0].guards.length, 6, 'Job 1 still has 6 ushers');
+  assert.equal(LEVELS[0].guards.length, 6, 'Job 1 still has 6 named guards');
   assert.equal(LEVELS[0].cameras.length, 2);
   assert.equal(LEVELS[0].lasers.length, 2);
   const j2 = LEVELS[1];
-  assert.equal(j2.guards.length, 4, 'Job 2 has 4 ushers');
+  assert.equal(j2.guards.length, 4, 'Job 2 has 4 named guards');
   assert.equal(j2.cameras.length, 3, 'Job 2 has 3 cameras');
   assert.equal(j2.lasers.length, 3, 'Job 2 has 3 lasers');
   assert.equal(j2.props.length, 3);
   assert.deepEqual(j2.props.map((p) => p.id), ['script', 'baton', 'rose']);
+  const j3 = LEVELS[2];
+  assert.equal(j3.name, 'THE VAULT AT MIDNIGHT');
+  assert.equal(j3.guards.length, 5, 'Job 3 has 5 named guards');
+  assert.equal(j3.cameras.length, 3, 'Job 3 has 3 cameras');
+  assert.equal(j3.lasers.length, 3, 'Job 3 has 3 lasers');
+  assert.equal(j3.props.length, 3);
   assert.deepEqual(j2.props.map((p) => p.name),
     ['The Gilded Script', 'The Silver Baton', 'The Velvet Rose']);
 });
@@ -178,35 +184,35 @@ test('m14: campaignTotal sums the bests, null counts 0', () => {
 });
 
 test('m14: updateBest only ever improves, a tie keeps the earlier run', () => {
-  assert.deepEqual(updateBest(null, 1000, 60), { score: 1000, time: 60 });
+  assert.deepEqual(updateBest(null, 1000, 60), { score: 1000, time: 60, stars: 0 });
   assert.deepEqual(updateBest({ score: 1245, time: 87.4 }, 1000, 60),
-    { score: 1245, time: 87.4 }, 'a worse replay never lowers the best');
+    { score: 1245, time: 87.4, stars: 0 }, 'a worse replay never lowers the best');
   assert.deepEqual(updateBest({ score: 1245, time: 87.4 }, 1500, 90),
-    { score: 1500, time: 90 });
+    { score: 1500, time: 90, stars: 0 });
   assert.deepEqual(updateBest({ score: 1245, time: 87.4 }, 1245, 80),
-    { score: 1245, time: 87.4 }, 'a tie keeps the earlier (faster) run');
+    { score: 1245, time: 87.4, stars: 0 }, 'a tie keeps the earlier (faster) run');
 });
 
 test('m14: selectCardLines — counts, status, best', () => {
   const fresh = freshCampaign();
   assert.deepEqual(selectCardLines(LEVELS[0], fresh, 0), [
     '1 · THE MIDNIGHT THEATRE',
-    '6 guards · 2 cameras · 2 lasers · 3 props',
+    '6 guards · 2 cams · 2 lasers',
     'NOT CLEARED',
     'PRESS 1',
   ]);
   assert.deepEqual(selectCardLines(LEVELS[1], fresh, 1), [
     '2 · THE GALLERY AFTER DARK',
-    '4 guards · 3 cameras · 3 lasers · 3 props',
+    '4 guards · 3 cams · 3 lasers',
     'LOCKED — clear Job 1 to open',
     '',
   ]);
   const cleared = { selected: 1, cleared: [true, false], best: [{ score: 1245, time: 87.4 }, null] };
   assert.deepEqual(selectCardLines(LEVELS[0], cleared, 0), [
     '1 · THE MIDNIGHT THEATRE',
-    '6 guards · 2 cameras · 2 lasers · 3 props',
+    '6 guards · 2 cams · 2 lasers',
     'CLEARED',
-    'BEST 1245 · 01:27',
+    'BEST 1245 · 01:27 · ☆☆☆',
   ]);
   assert.equal(selectCardLines(LEVELS[1], cleared, 1)[2], 'NOT CLEARED');
 });
@@ -236,19 +242,21 @@ test('m14: selectLayout — cards + howto inside the canvas, no overlap, baselin
 });
 
 test('m14: jobAtPoint hits the cards, misses the gaps', () => {
-  assert.equal(jobAtPoint(280, 170), 0, 'card 1 centre');
-  assert.equal(jobAtPoint(680, 170), 1, 'card 2 centre');
-  assert.equal(jobAtPoint(480, 170), -1, 'the gap between the cards');
+  assert.equal(jobAtPoint(170, 170), 0, 'card 1 centre');
+  assert.equal(jobAtPoint(480, 170), 1, 'card 2 centre');
+  assert.equal(jobAtPoint(790, 170), 2, 'card 3 centre');
+  assert.equal(jobAtPoint(325, 170), -1, 'the gap between cards 1 and 2');
   assert.equal(jobAtPoint(480, 300), -1, 'the howto panel is not a card');
   assert.equal(jobAtPoint(50, 50), -1, 'open floor');
 });
 
 // --- transitions (the full select/win/lose flow; the basics live in m4.test.js) ---
 
-test('m14: screens — win Job 1 Enter goes NEXT JOB, win Job 2 Enter goes back to the title', () => {
+test('m14: screens — win Job 1/2 Enter goes NEXT JOB, win Job 3 Enter goes back to the title (M16)', () => {
   assert.deepEqual(transition('win', 'Enter'), { screen: 'play', action: 'next' });
   assert.deepEqual(transition('win', 'Enter', { jobIndex: 0 }), { screen: 'play', action: 'next' });
-  assert.deepEqual(transition('win', 'Enter', { jobIndex: 1 }), { screen: 'select', action: 'title' });
+  assert.deepEqual(transition('win', 'Enter', { jobIndex: 1 }), { screen: 'play', action: 'next' });
+  assert.deepEqual(transition('win', 'Enter', { jobIndex: 2 }), { screen: 'select', action: 'title' });
   assert.deepEqual(transition('win', 'KeyR'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('lose', 'Enter'), { screen: 'play', action: 'restart' });
   assert.deepEqual(transition('lose', 'Enter', { jobIndex: 1 }), { screen: 'play', action: 'restart' });
@@ -258,7 +266,7 @@ test('m14: screens — win Job 1 Enter goes NEXT JOB, win Job 2 Enter goes back 
 
 test('m14: textBox measures the centred box from the metrics', () => {
   assert.deepEqual(
-    textBox('USHER 1 · PATROL', 300, 100, { width: 106, ascent: 11, descent: 3 }),
+    textBox('CORVIN · PATROL', 300, 100, { width: 106, ascent: 11, descent: 3 }),
     { x: 247, y: 89, w: 106, h: 14 });
   assert.deepEqual(
     textBox('X', 100, 50, { width: 10, ascent: 11, descent: 3 }, 'left'),
@@ -267,23 +275,23 @@ test('m14: textBox measures the centred box from the metrics', () => {
 
 test('m14: labelOccluded catches the three user defects; the anchor-only check misses them', () => {
   const overlay = overlayPanelRect(11); // the old 11-line start panel
-  // (1) USHER 1: the anchor (140,280) sits OUTSIDE the panel (x<150),
+  // (1) CORVIN: the anchor (140,280) sits OUTSIDE the panel (x<150),
   // but the text juts under the panel's left edge — cut in half.
   // The label is 16 chars at 11px monospace = 105.6px wide.
-  const usher1 = textBox('USHER 1 · PATROL', 140, 280, { width: 105.6, ascent: 11, descent: 3 });
-  assert.equal(labelOccluded(usher1, [overlay]), true, 'the straddling box is occluded');
+  const corvin = textBox('CORVIN · PATROL', 140, 280, { width: 105.6, ascent: 11, descent: 3 });
+  assert.equal(labelOccluded(corvin, [overlay]), true, 'the straddling box is occluded');
   assert.equal(labelInsideHudCheck(140, 280), false, 'but the anchor-only check says clear');
-  // (2) USHER 4 on the select screen: the label box overlaps card 2.
+  // (2) ODETTE on the select screen: the label box overlaps card 3.
   const L = selectLayout();
-  const usher4 = textBox('USHER 4 · PATROL', 900, 180, { width: 105.6, ascent: 11, descent: 3 });
-  assert.equal(labelOccluded(usher4, [L.cards[1]]), true, 'on the card edge');
+  const odette = textBox('ODETTE · PATROL', 900, 180, { width: 105.6, ascent: 11, descent: 3 });
+  assert.equal(labelOccluded(odette, [L.cards[2]]), true, 'on the card edge');
   // (3) CAM 2: LASER 1 (y=290) crosses the label text at (900,288).
   const cam2 = textBox('CAM 2', 900, 288, { width: 33, ascent: 11, descent: 3 });
   const laser1 = laserOccluder({ x1: 660, y1: 290, x2: 940, y2: 290 });
   assert.equal(labelOccluded(cam2, [laser1]), true, 'the beam crosses the text');
   assert.equal(labelInsideHudCheck(900, 288), false, 'but the anchor-only check says clear');
   // A clear label is not occluded (well above the panel, far from the beam).
-  const clear = textBox('USHER 2 · SEARCH', 560, 150, { width: 105.6, ascent: 11, descent: 3 });
+  const clear = textBox('MIRA · SEARCH', 560, 150, { width: 85.8, ascent: 11, descent: 3 });
   assert.equal(labelOccluded(clear, [overlay, laser1]), false);
 });
 
@@ -362,6 +370,7 @@ test('m14: winScreenLines — Job 1 offers NEXT JOB, Job 2 closes the campaign, 
       'JOB 1 · THE MIDNIGHT THEATRE — CLEARED',
       'Time: 01:27 · Props 2/3 · Spotted 0x',
       'Score: 1245 — Props 600 + Ghost 500 + Time 145',
+      'STARS ★★☆ · PAR 01:30',
       'CAMPAIGN TOTAL 1245',
     ],
     footer: 'NEXT JOB — PRESS ENTER · R TO REPLAY',
@@ -373,22 +382,23 @@ test('m14: winScreenLines — Job 1 offers NEXT JOB, Job 2 closes the campaign, 
       'JOB 2 · THE GALLERY AFTER DARK — CLEARED',
       'Time: 01:35 · Props 3/3 · Spotted 0x',
       'Score: 1529 — Props 900 + Ghost 500 + Time 129',
-      'CAMPAIGN COMPLETE — TOTAL 2774',
+      'STARS ★★★ · PAR 01:45',
+      'CAMPAIGN TOTAL 2774',
     ],
-    footer: 'PRESS ENTER — BACK TO TITLE · R TO REPLAY',
+    footer: 'NEXT JOB — PRESS ENTER · R TO REPLAY',
   });
 });
 
 test('m14: loseScreenLines — the M13 body, unchanged in meaning', () => {
   const w = createWorld();
-  w.caughtBy = 'USHER 3';
+  w.caughtBy = 'ODETTE';
   w.props[0].taken = true;
   w.time = 30;
   w.detections = 1;
   assert.deepEqual(loseScreenLines(w), {
     title: 'CAUGHT!',
     body: [
-      'USHER 3 caught you.',
+      'ODETTE caught you.',
       'An usher saw you inside the cone for too long.',
       'Score: 500 — Props 300 + Time 200',
     ],
@@ -498,7 +508,7 @@ function textsOf(ctx) {
 // World labels only (guard / camera / prop names) — the panel texts,
 // the room labels (baked floor text) and the EXIT label are not world
 // labels and are not subject to the box rule.
-const LABEL_RE = /^(USHER \d|CAM \d|THE )/;
+const LABEL_RE = /^(CAM \d|THE )| · (PATROL|CHASE|SEARCH|SUSPICIOUS)$/;
 
 // For every world label actually DRAWN in a frame, its text box (from
 // the recorded font + the mock measure) must not touch any occluder
@@ -526,25 +536,29 @@ test('m14 render: select frame draws the job cards + howto panel, one straight l
   const L = selectLayout();
   // The cards + the howto panel are drawn (fillRect), the title is centred.
   const rects = ctx.calls.filter((c) => c[0] === 'fillRect');
-  assert.ok(rects.some((c) => c[1] === 90 && c[2] === 108 && c[3] === 380 && c[4] === 128),
+  assert.ok(rects.some((c) => c[1] === 20 && c[2] === 108 && c[3] === 300 && c[4] === 128),
     'job card 1 drawn');
-  assert.ok(rects.some((c) => c[1] === 490 && c[2] === 108 && c[3] === 380 && c[4] === 128),
+  assert.ok(rects.some((c) => c[1] === 330 && c[2] === 108 && c[3] === 300 && c[4] === 128),
     'job card 2 drawn');
+  assert.ok(rects.some((c) => c[1] === 640 && c[2] === 108 && c[3] === 300 && c[4] === 128),
+    'job card 3 drawn');
   assert.ok(rects.some((c) => c[1] === 90 && c[2] === 250 && c[3] === 780 && c[4] === 272),
     'howto panel drawn');
   assert.ok(texts.includes('CURTAIN CALL'), 'title drawn');
   assert.ok(texts.includes('1 · THE MIDNIGHT THEATRE'), 'Job 1 card drawn');
   assert.ok(texts.includes('2 · THE GALLERY AFTER DARK'), 'Job 2 card drawn');
+  assert.ok(texts.includes('3 · THE VAULT AT MIDNIGHT'), 'Job 3 card drawn');
   assert.ok(texts.some((t) => t.includes('CLEARED')), 'Job 1 status drawn');
-  // The fixture has Job 1 CLEARED, so Job 2 is OPEN (not locked):
-  // 'NOT CLEARED' + 'PRESS 2'. The locked card IS covered by the
-  // selectCardLines unit tests (fresh campaign, Job 2 locked).
-  assert.ok(texts.some((t) => t.includes('NOT CLEARED')), 'Job 2 open status drawn');
-  assert.ok(texts.some((t) => t.includes('PRESS 2')), 'Job 2 press hint drawn');
+  // The M16 fixture has Jobs 1+2 CLEARED, so Job 3 is OPEN (not
+  // locked): 'NOT CLEARED' + 'PRESS 3'. The locked card IS covered
+  // by the selectCardLines unit tests (fresh campaign, Job 3 locked).
+  assert.ok(texts.some((t) => t.includes('NOT CLEARED')), 'Job 3 open status drawn');
+  assert.ok(texts.some((t) => t.includes('PRESS 3')), 'Job 3 press hint drawn');
   assert.ok(texts.some((t) => t.includes('BEST 1245')), 'Job 1 best drawn');
+  assert.ok(texts.some((t) => t.includes('BEST 1529')), 'Job 2 best drawn');
   assert.ok(texts.includes('HOW TO PLAY'), 'howto header drawn');
-  assert.ok(texts.includes('CLICK A JOB CARD OR PRESS 1–2 · ENTER TO START'), 'closer drawn');
-  assert.ok(texts.includes('CAMPAIGN BEST 1245'), 'campaign best drawn');
+  assert.ok(texts.includes('CLICK A JOB CARD OR PRESS 1–3 · ENTER TO START'), 'closer drawn');
+  assert.ok(texts.includes('CAMPAIGN BEST 2774'), 'campaign best drawn');
   // One straight left edge: every non-blank howto line is left-aligned
   // at the same x (panel.x + 40); the title + closer stay centred.
   const howtoLines = selectHowtoLines();
@@ -562,23 +576,26 @@ test('m14 render: select frame draws the job cards + howto panel, one straight l
   assert.equal(closer[4], 'center', 'the closer stays centred');
   // The card lines are left-aligned on the card's fixed margin.
   const cardLine = rows.find((c) => c[1] === '1 · THE MIDNIGHT THEATRE');
-  assert.equal(cardLine[2], 90 + 16, 'card lines on the card margin');
+  assert.equal(cardLine[2], 20 + 16, 'card lines on the card margin');
   assert.equal(cardLine[4], 'left', 'card lines left-aligned');
-  // Labels: G4 + CAM 2 + CAM 3 read in the clear strips; the rest are
-  // skipped by the box rule (cards / howto / title / tagline zones).
-  assert.ok(texts.some((t) => t.startsWith('USHER 4')), 'USHER 4 label shown (clear top strip)');
+  // Labels (Job 3 backdrop): BASIL + CAM 2 + CAM 3 read in the clear
+  // strips; the rest are skipped by the box rule (cards / howto /
+  // title / tagline zones). VERA's box sits 1px under the tagline
+  // box, so the 2px margin skips it too.
+  assert.ok(texts.some((t) => t.startsWith('BASIL')), 'BASIL label shown (clear top strip)');
   assert.ok(texts.includes('CAM 2'), 'CAM 2 label shown');
   assert.ok(texts.includes('CAM 3'), 'CAM 3 label shown');
-  assert.ok(!texts.some((t) => t.startsWith('USHER 1')), 'USHER 1 label skipped (tagline zone)');
-  assert.ok(!texts.some((t) => t.startsWith('USHER 2')), 'USHER 2 label skipped (howto panel)');
-  assert.ok(!texts.some((t) => t.startsWith('USHER 3')), 'USHER 3 label skipped (tagline zone)');
+  assert.ok(!texts.some((t) => t.startsWith('VERA')), 'VERA label skipped (tagline zone, 1px + margin)');
+  assert.ok(!texts.some((t) => t.startsWith('LUKA')), 'LUKA label skipped (howto panel)');
+  assert.ok(!texts.some((t) => t.startsWith('ODETTE')), 'ODETTE label skipped (tagline zone)');
+  assert.ok(!texts.some((t) => t.startsWith('NOOR')), 'NOOR label skipped (howto panel)');
   assert.ok(!texts.includes('CAM 1'), 'CAM 1 label skipped (title zone)');
   // M15: prop name labels are GONE from the playfield entirely (the
   // names live in the rail LOOT checklist) — not skipped by the box
   // rule, simply never drawn.
-  assert.ok(!texts.includes('THE GILDED SCRIPT'), 'Script label removed from the playfield');
-  assert.ok(!texts.includes('THE SILVER BATON'), 'Baton label removed from the playfield');
-  assert.ok(!texts.includes('THE VELVET ROSE'), 'Rose label removed from the playfield');
+  assert.ok(!texts.includes('OBSIDIAN KEY'), 'Key label removed from the playfield');
+  assert.ok(!texts.includes('JADE LEDGER'), 'Ledger label removed from the playfield');
+  assert.ok(!texts.includes('MIDNIGHT CROWN'), 'Crown label removed from the playfield');
   // The box rule on the frame itself: no drawn label touches a select
   // panel, a laser, the rail, or the title/tagline text zones.
   const occluders = [...L.cards, L.howto, railRect()];
@@ -597,14 +614,14 @@ test('m14 render: Job 2 play frame — calm staging, labels read, none touches t
   const texts = textsOf(ctx);
   assert.ok(texts.includes('CURTAIN CALL'), 'rail title drawn');
   // M15 calm staging: the player hides in the dark west of curtain A,
-  // USHER 2 searches the south hall, CAM 2 sweeps (not spotted), all
-  // lasers are down. No header hides anyone now, so all 4 ushers +
-  // all 3 cameras read (USHER 4 + CAM 1 were skipped under the old
+  // DORIN searches the south hall, CAM 2 sweeps (not spotted), all
+  // lasers are down. No header hides anyone now, so all 4 guards +
+  // all 3 cameras read (NERO + CAM 1 were skipped under the old
   // header; the box rule still applies — the rail + the beams).
-  assert.ok(texts.some((t) => t.startsWith('USHER 1')), 'USHER 1 label shown');
-  assert.ok(texts.some((t) => t.startsWith('USHER 2')), 'USHER 2 label shown');
-  assert.ok(texts.some((t) => t.startsWith('USHER 3')), 'USHER 3 label shown');
-  assert.ok(texts.some((t) => t.startsWith('USHER 4')), 'USHER 4 label shown (no header to hide it)');
+  assert.ok(texts.some((t) => t.startsWith('ALBA')), 'ALBA label shown');
+  assert.ok(texts.some((t) => t.startsWith('DORIN')), 'DORIN label shown');
+  assert.ok(texts.some((t) => t.startsWith('ELIF')), 'ELIF label shown');
+  assert.ok(texts.some((t) => t.startsWith('NERO')), 'NERO label shown (no header to hide it)');
   assert.ok(texts.includes('CAM 1'), 'CAM 1 label shown (no header to hide it)');
   assert.ok(texts.includes('CAM 2'), 'CAM 2 label shown');
   assert.ok(texts.includes('CAM 3'), 'CAM 3 label shown');
@@ -617,7 +634,7 @@ test('m14 render: Job 2 play frame — calm staging, labels read, none touches t
   assert.ok(!texts.includes('WEST WING'), 'WEST WING room label removed from the playfield');
   // The rail carries the game state: searching guard + patrol count +
   // the GHOST goal line.
-  assert.ok(texts.some((t) => t.includes('U2 SEARCH 8t')), 'roster names the searching guard');
+  assert.ok(texts.some((t) => t.includes('DORIN SEARCH 8t')), 'roster names the searching guard');
   assert.ok(texts.some((t) => t.includes('3 PATROL')), 'roster collapses the calm guards');
   assert.ok(texts.some((t) => t.includes('EXIT: OPEN · GHOST')), 'goal line reads GHOST');
   const occluders = [railRect()];
@@ -648,13 +665,13 @@ test('m14 render: Job 2 win frame — body left-aligned, closer centred, overlay
   const footerRow = rows.find((c) => c[1] === footer);
   assert.equal(footerRow[4], 'center', 'the closer stays centred');
   assert.equal(footerRow[2], CONFIG.VIEW_WIDTH / 2, 'the closer is centred on the canvas');
-  assert.ok(texts.includes('CAMPAIGN COMPLETE — TOTAL 2774'), 'campaign total drawn');
-  // Labels: G2 is skipped (its box sits inside the overlay panel);
+  assert.ok(texts.includes('CAMPAIGN TOTAL 2774'), 'campaign total drawn');
+  // Labels: DORIN is skipped (its box sits inside the overlay panel);
   // the rest read in the clear strips.
-  assert.ok(!texts.some((t) => t.startsWith('USHER 2')), 'USHER 2 label skipped (overlay panel)');
-  assert.ok(texts.some((t) => t.startsWith('USHER 1')), 'USHER 1 label shown');
-  assert.ok(texts.some((t) => t.startsWith('USHER 3')), 'USHER 3 label shown');
-  assert.ok(texts.some((t) => t.startsWith('USHER 4')), 'USHER 4 label shown');
+  assert.ok(!texts.some((t) => t.startsWith('DORIN')), 'DORIN label skipped (overlay panel)');
+  assert.ok(texts.some((t) => t.startsWith('ALBA')), 'ALBA label shown');
+  assert.ok(texts.some((t) => t.startsWith('ELIF')), 'ELIF label shown');
+  assert.ok(texts.some((t) => t.startsWith('NERO')), 'NERO label shown');
   assert.ok(texts.includes('CAM 1'), 'CAM 1 label shown');
   assert.ok(texts.includes('CAM 2'), 'CAM 2 label shown');
   assert.ok(texts.includes('CAM 3'), 'CAM 3 label shown');

@@ -296,26 +296,26 @@ test('hud: scoreBreakdown — props 300 each, GHOST 500, time bonus, spotted cou
 
 test('hud: guardStatesShort adds tile distances with a player position', () => {
   const out = guardStatesShort([
-    { name: 'USHER 1', state: 'chase', x: 100, y: 140 },
-    { name: 'USHER 2', state: 'suspicious', x: 260, y: 100 },
-    { name: 'USHER 3', state: 'patrol' },
-    { name: 'USHER 4', state: 'patrol' },
-    { name: 'USHER 5', state: 'patrol' },
-    { name: 'USHER 6', state: 'patrol' },
+    { name: 'CORVIN', state: 'chase', x: 100, y: 140 },
+    { name: 'MIRA', state: 'suspicious', x: 260, y: 100 },
+    { name: 'OTTO', state: 'patrol' },
+    { name: 'SELMA', state: 'patrol' },
+    { name: 'IVO', state: 'patrol' },
+    { name: 'PETRA', state: 'patrol' },
   ], { x: 100, y: 100 });
-  assert.equal(out, 'U1 CHASE 1t · U2 SUSPICIOUS 4t · 4 PATROL');
+  assert.equal(out, 'CORVIN CHASE 1t · MIRA SUSPICIOUS 4t · 4 PATROL');
 });
 
 test('hud: guardStatesShort distLimit keeps distances for the 3 nearest only', () => {
   const out = guardStatesShort([
-    { name: 'USHER 1', state: 'chase', x: 360, y: 0 },
-    { name: 'USHER 2', state: 'suspicious', x: 40, y: 0 },
-    { name: 'USHER 3', state: 'search', x: 200, y: 0 },
-    { name: 'USHER 4', state: 'chase', x: 80, y: 0 },
-    { name: 'USHER 5', state: 'patrol' },
-    { name: 'USHER 6', state: 'patrol' },
+    { name: 'CORVIN', state: 'chase', x: 360, y: 0 },
+    { name: 'MIRA', state: 'suspicious', x: 40, y: 0 },
+    { name: 'OTTO', state: 'search', x: 200, y: 0 },
+    { name: 'SELMA', state: 'chase', x: 80, y: 0 },
+    { name: 'IVO', state: 'patrol' },
+    { name: 'PETRA', state: 'patrol' },
   ], { x: 0, y: 0 }, 3);
-  assert.equal(out, 'U1 CHASE · U2 SUSPICIOUS 1t · U3 SEARCH 5t · U4 CHASE 2t · 2 PATROL');
+  assert.equal(out, 'CORVIN CHASE · MIRA SUSPICIOUS 1t · OTTO SEARCH 5t · SELMA CHASE 2t · 2 PATROL');
 });
 
 test('hud: the objective checklist marks taken props with a check', () => {

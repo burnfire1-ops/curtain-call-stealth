@@ -87,6 +87,11 @@ const CONFIG = {
   TIME_BONUS_MAX: 200, // full time bonus at <= TIME_BONUS_FULL_S
   TIME_BONUS_FULL_S: 60, // seconds — full bonus up to a 1-minute run
   TIME_BONUS_DECAY: 2, // points lost per second past the full window
+  // M16: par time per job (seconds) — the 3-star bar. Job 1 90s and
+  // Job 2 105s are the M13/M14 staged full-clear times + ~15s; Job 3
+  // is set from the T3 probe the same way (placeholder 90 until the
+  // probe is measured — see tests/m16.test.js).
+  PAR_S: [90, 105, 90],
 };
 
 export default CONFIG;

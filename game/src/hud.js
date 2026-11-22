@@ -1,17 +1,10 @@
-// CURTAIN CALL — M4 HUD: pure data for the HUD + the HUD drawing itself.
-// game-ui-ux: the HUD is driven by game state (props, guard states,
-// suspicion) — the draw function only reads, it never mutates the world.
-// Pure helpers are unit-tested (tests/m4.test.js); drawHud is verified
-// visually via headless screenshots, like render.js in M1–M3.
+// hud.js — HUD data + drawing (rail, roster, meters).
 import CONFIG from './config.js';
 import { lightAt, floorAt } from './level.js'; // M15: rail VISIBILITY/NOISE words read the live floor/light
 
-// Legend (tesis differentiator 4): light = danger, dark = safe, and the
-// floor that talks — readable at a glance, also on the judge's sheet.
 export const LEGEND =
   'LIGHT=danger · DARK=safe · CARPET=silent · RUNNING on wood=noisy';
 
-// Seconds -> "mm:ss", flooring the fraction (a 87.4s run reads 01:27).
 export function formatTime(seconds) {
   const total = Math.max(0, Math.floor(seconds));
   const mm = String(Math.floor(total / 60)).padStart(2, '0');
@@ -19,19 +12,16 @@ export function formatTime(seconds) {
   return `${mm}:${ss}`;
 }
 
-// The guard the player should worry about most (highest suspicion).
-// Null when there is no guard (defensive; the level always ships 5).
 export function worstSuspicion(guards) {
   if (!guards || guards.length === 0) return null;
   return guards.reduce((a, b) => (b.suspicion > a.suspicion ? b : a));
 }
 
-// Props with names + taken flags, in level order; short names keep the
-// HUD line inside the 960px canvas (full names stay on the map labels).
 export function propsSummary(props) {
   const short = {
     tiara: 'Tiara', mask: 'Mask', violin: 'Violin',
     script: 'Script', baton: 'Baton', rose: 'Rose', // M14: Job 2 props
+    key: 'Key', ledger: 'Ledger', crown: 'Crown', // M16: Job 3 props
   };
   return {
     taken: props.filter((p) => p.taken).length,
@@ -43,13 +33,7 @@ export function propsSummary(props) {
   };
 }
 
-// M8: compressed guard list — only non-patrol guards are named; patrols
-// collapse into a count ("U3 CHASE · 5 PATROL", "6 PATROL" when all calm).
-// The alarming state is the signal; patrol is the default. The full
-// per-guard list still exists via guardStates() (tested, untouched).
 // Pure, unit-tested in tests/m8.test.js.
-// M13: distances only for the `distLimit` nearest alerted guards
-// (the fallback when the full-distance line would overflow the
 // header panel — the roster order itself never changes).
 export function guardStatesShort(states, player, distLimit = Infinity) {
   const alerted = states.filter((g) => g.state !== 'patrol');
@@ -64,7 +48,7 @@ export function guardStatesShort(states, player, distLimit = Infinity) {
       .map((r) => r.g));
   }
   const parts = alerted.map((g) => {
-    const base = `${g.name.replace('USHER ', 'U')} ${g.state.toUpperCase()}`;
+    const base = `${g.name} ${g.state.toUpperCase()}`;
     if (!player || g.x === undefined || g.y === undefined) return base;
     if (near && !near.has(g)) return base;
     const tiles = Math.round(
@@ -75,27 +59,19 @@ export function guardStatesShort(states, player, distLimit = Infinity) {
   return parts.join(' · ');
 }
 
-// One short line per usher: name + FSM state, in level order.
-// M13: positions ride along so the roster can show tile distances.
 export function guardStates(guards) {
   return guards.map((g) => ({ name: g.name, state: g.state, x: g.x, y: g.y }));
 }
 
-// One short line per camera: name + sweep state, in level order.
-// M12: 'sweep' (patrolling its arc) or 'spotted' (suspicion >= 0.5).
 export function cameraStates(cameras) {
   return (cameras || []).map((c) => ({ name: c.name, state: c.state }));
 }
 
-// M12: camera roster, same shape as the guard list — "CAM 1 SWEEP ·
 // CAM 2 SPOTTED". Pure, unit-tested in tests/m12.test.js.
 export function cameraStatesShort(states) {
   return states.map((c) => `${c.name} ${c.state.toUpperCase()}`).join(' · ');
 }
 
-// M13 alarm stages (game-ui-ux: a DISPLAY mapping over the worst
-// suspicion — the fill rates never change). The building alarm
-// overrides everything: an active alarm is ALARM at any meter value.
 // Pure, unit-tested in tests/m13.test.js.
 export function alarmStage(worst, alarmActive) {
   if (alarmActive || worst >= CONFIG.STAGE_ALARM) return 'ALARM';
@@ -111,7 +87,6 @@ export const STAGE_COLORS = {
   ALARM: '#ff3b30',
 };
 
-// M13 time bonus: full +200 at <= 60s, then -2/s, floored at 0.
 // Pure, unit-tested in tests/m13.test.js.
 export function timeBonus(seconds) {
   if (seconds <= CONFIG.TIME_BONUS_FULL_S) return CONFIG.TIME_BONUS_MAX;
@@ -120,10 +95,6 @@ export function timeBonus(seconds) {
     - CONFIG.TIME_BONUS_DECAY * (seconds - CONFIG.TIME_BONUS_FULL_S)));
 }
 
-// M13 score (informative only — win/lose rules never change):
-// props x300 + GHOST +500 (0 detections) + time bonus. The live
-// header number equals the win-screen total if you won right now
-// (a run with detections already lost the GHOST bonus). Pure.
 export function scoreBreakdown(world) {
   const taken = world.props.filter((p) => p.taken).length;
   const props = taken * CONFIG.PROP_SCORE;
@@ -132,19 +103,11 @@ export function scoreBreakdown(world) {
   return { props, ghost, time, total: props + ghost + time, spotted: world.detections };
 }
 
-// M13: the objective checklist line — a taken prop shows ✓, the
-// rest ○ ("Props 2/3 ✓ Tiara ✓ Mask ○ Violin"). Extracted pure so
-// the checklist is unit-tested, not only screenshot-verified.
 export function propsChecklistLine(summary) {
   return `Props ${summary.taken}/${summary.total} `
     + summary.items.map((i) => `${i.taken ? '✓' : '○'} ${i.name}`).join(' ');
 }
 
-// M15 minimap (game-ui-ux: a tactical map, always on) — moved off
-// the playfield into the rail bottom (the M14 bottom-right panel
-// covered the Violin prop and forced its label to be skipped). The
-// panel is aspect-correct (160x100 = 960:600), centred in the rail,
-// opaque so nothing shows through it. Pure projection — the m13
 // corner/centre mapping test still applies to the new rect.
 export function minimapRect() {
   return { x: 1000, y: 490, w: 160, h: 100 };
@@ -157,13 +120,10 @@ export function projectToMinimap(x, y, rect = minimapRect()) {
   };
 }
 
-// Win rank (tesis Q3): GHOST only when the player was never spotted —
-// detections counts every chase entry, so any alarm breaks the ghost.
 export function winRank(detections) {
   return detections === 0 ? 'GHOST' : 'SPOTTED';
 }
 
-// Last noise the player made: floor material + radius, or silence.
 // lastNoise is set by world.js only while the player runs.
 export function lastNoiseText(world) {
   const n = world.lastNoise;
@@ -179,20 +139,12 @@ const COLORS = {
   meterLow: '#e8a33d',
   meterHigh: '#dc3c28',
   coin: '#ffd94d', // M12: the coin counter gold (same gold as props)
-  // M11: framed panels (game-ui-ux: panel depth like top-10 LB) —
-  // dark translucent fill + 1px light border + offset shadow.
   panelFill: 'rgba(12, 9, 7, 0.82)',
-  // HUD-fix: the minimap panel is OPAQUE — the translucent fill let
-  // the "LEAD'S VIOLIN" floor label show through it (defect 3).
   panelFillOpaque: 'rgba(12, 9, 7, 1)',
   panelBorder: 'rgba(245, 240, 230, 0.20)',
   panelShadow: 'rgba(0, 0, 0, 0.35)',
 };
 
-// M11: framed panel (dark fill + offset shadow + 1px border) — the
-// top-10 HUD depth treatment. Used by the HUD and by render.js
-// overlays; pure drawing, no game state. HUD-fix: optional `fill`
-// (the minimap passes the opaque fill; everything else keeps the
 // translucent default).
 export function drawPanel(ctx, x, y, w, h, border = COLORS.panelBorder, fill = COLORS.panelFill) {
   ctx.fillStyle = COLORS.panelShadow;
@@ -204,28 +156,11 @@ export function drawPanel(ctx, x, y, w, h, border = COLORS.panelBorder, fill = C
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 }
 
-// M15 — the right rail (game-ui-ux: sidebar HUD, the top-3 pattern):
-// the header bar and the bottom bar are DELETED, and every HUD
-// element lives in one 240px rail at the canvas's right edge — the
-// playfield (x0..960) is 100% game, no panel ever covers it. The rail
-// is the single HUD panel now: one dark navy slab, a thin gold
-// divider at x=960, sections top-to-bottom (title / job / score /
-// objective / stage pill + suspicion bar / visibility / noise / loot
-// checklist / ushers roster / goal / icon legend / controls /
-// minimap). All text is 10–15px monospace on the 216px inner width
 // (x972..1188, 12px margins).
 export function railRect() {
   return { x: CONFIG.RAIL_X, y: 0, w: CONFIG.RAIL_W, h: CONFIG.CANVAS_H };
 }
 
-// M15: the rail text rows, as pure data — the single source of truth
-// for drawHud AND the tests (game-ui-ux: rows sized to their section
-// with breathing room, never crammed). Every baseline is >=10px from
-// the rail's top/bottom edge (title 26, last controls line 482 vs
-// the 600px rail) and every line fits the 216px inner width. The
-// roster block reserves 5 lines (312..364); the sections below it
-// (goal 384, legend 404..450, controls 468/482, minimap 490..590)
-// are FIXED positions, so a short calm roster leaves breathing room
 // instead of shifting the layout.
 export function railLayout() {
   const rail = railRect();
@@ -262,23 +197,11 @@ export function railLayout() {
   };
 }
 
-// M15: is a label anchor point covered by the HUD? The rail is the
-// only HUD panel now — a point inside x960..1200 is under it, a
-// point on the playfield (x<960) is clear. render.js skips a world
-// label whose TEXT BOX touches the rail (the box rule, 06:22 WIB);
-// the roster line in the rail carries the guard/camera instead.
 export function labelInsideHud(x, y) {
   const r = railRect();
   return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h;
 }
 
-// HUD-fix: the roster line, compressed until it fits `maxWidth`
-// (measured by `measure`, a (text) => width function). Levels, in
-// order — the M8/M13 distance fallbacks first, then the checklist
-// short form, then the alert-count compression (the M8 precedent:
-// patrols already collapse to a count when space demands it). The
-// last level always fits a 712px bar: even 6 simultaneous alerts
-// read as "6 ALERT | Props 0/3 | SPOTTED ×0" (~45 chars). Pure.
 export function buildRosterLine(states, player, summary, detections, maxWidth, measure) {
   const spotted = `SPOTTED ×${detections}`;
   const fullChecklist = propsChecklistLine(summary);
@@ -303,15 +226,11 @@ export function buildRosterLine(states, player, summary, detections, maxWidth, m
   return `${roster}   |   ${checklist}   |   ${spotted}`;
 }
 
-// M11: how many segments of a segmented bar are filled (0..total),
-// from a 0..1 value — pure, unit-tested (tests/m11.test.js).
 export function segmentCount(value, total) {
   const v = Math.max(0, Math.min(1, value));
   return Math.max(0, Math.min(total, Math.round(v * total)));
 }
 
-// M11: segmented bar (top-10 style: ALARM / HEAT bars) — empty
-// segments in meterBg, filled ones in fillColor. Pure drawing.
 export function drawSegmentedBar(ctx, x, y, segW, segH, gap, filled, total, fillColor) {
   for (let i = 0; i < total; i++) {
     ctx.fillStyle = i < filled ? fillColor : COLORS.meterBg;
@@ -319,18 +238,12 @@ export function drawSegmentedBar(ctx, x, y, segW, segH, gap, filled, total, fill
   }
 }
 
-// M13 minimap drawing: panel + room bounds + covers + exit + props
-// + guards + cameras + lasers + player, all projected from world
-// coordinates. Guards are amber dots (red while chasing), cameras
-// teal dots, lasers red lines (dim dashed while OFF), the player a
-// white dot with a dark ring. Pure drawing, reads the world only.
 export function drawMinimap(ctx, world) {
   const rect = minimapRect();
   // HUD-fix: opaque fill — the translucent default let the
   // "LEAD'S VIOLIN" floor label show through the panel.
   drawPanel(ctx, rect.x, rect.y, rect.w, rect.h, COLORS.panelBorder, COLORS.panelFillOpaque);
   const p = (x, y) => projectToMinimap(x, y, rect);
-  // Room bounds (the outer walls, inset by the wall thickness).
   const a = p(CONFIG.WALL, CONFIG.WALL);
   const b = p(CONFIG.VIEW_WIDTH - CONFIG.WALL, CONFIG.VIEW_HEIGHT - CONFIG.WALL);
   ctx.strokeStyle = 'rgba(245, 240, 230, 0.25)';
@@ -356,7 +269,6 @@ export function drawMinimap(ctx, world) {
     ctx.stroke();
     ctx.setLineDash([]);
   }
-  // Exit: green square. Props: gold diamonds (grey when taken).
   const e0 = p(world.exit.x, world.exit.y);
   const e1 = p(world.exit.x + world.exit.w, world.exit.y + world.exit.h);
   ctx.fillStyle = '#2e7d32';
@@ -372,7 +284,6 @@ export function drawMinimap(ctx, world) {
     ctx.closePath();
     ctx.fill();
   }
-  // Cameras: teal dots. Guards: amber dots, red while chasing.
   for (const cam of world.cameras || []) {
     const cp = p(cam.x, cam.y);
     ctx.fillStyle = '#2dd4bf';
@@ -398,7 +309,6 @@ export function drawMinimap(ctx, world) {
   ctx.stroke();
 }
 
-// Rounded-rect path for the state pill (arcs, not ctx.roundRect, so
 // it works on every canvas the game runs on).
 function pillPath(ctx, x, y, w, h, r) {
   const rr = Math.min(r, h / 2, w / 2);
@@ -415,33 +325,16 @@ function pillPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// M11: state pill colours — the pill fill IS the state colour (top-10
-// big-badge style); text is dark on a filled pill, dim on the patrol
-// pill (which is only a tinted outline). Labels stay the M10 strings.
 const pillByState = {
   patrol: { fill: 'rgba(232, 179, 61, 0.14)', border: 'rgba(232, 179, 61, 0.45)', text: COLORS.hudDim },
   suspicious: { fill: '#ffce54', border: '#ffce54', text: '#1a140f' },
   chase: { fill: '#ff6b57', border: '#ff6b57', text: '#1a140f' },
   search: { fill: '#ff9a3d', border: '#ff9a3d', text: '#1a140f' },
-  // M12: camera states reuse the guard palette (a spotted camera is
-  // a suspicious-grade alert); 'sweep' is the patrol-grade default.
   sweep: { fill: 'rgba(232, 179, 61, 0.14)', border: 'rgba(232, 179, 61, 0.45)', text: COLORS.hudDim },
   spotted: { fill: '#ffce54', border: '#ffce54', text: '#1a140f' },
-  // M12: the building alarm overrides every other pill, solid red.
   alarm: { fill: '#ff3b30', border: '#ff3b30', text: '#ffffff' },
 };
 
-// Suspicion meter, guard list, props, timer, legend, noise — all the
-// data the HUD needs, drawn from the world each frame. `t` is real time
-// (seconds) and drives the pulse: above 0.7 suspicion the bar throbs so
-// a near-miss reads even at contact-sheet size. `muted` shows MUTE
-// next to the timer (the M key itself is documented on the start
-// screen — the controls line is too long to carry it, see below).
-// M15: the rail's per-guard roster lines (Moonlit-rail pattern: one
-// line per guard, alerted guards named with tile distance, patrols
-// collapsed to a count, cameras as short "C1 SWEEP" lines). Capped
-// at railLayout().rosterMaxLines (5): alerted guards first, then
-// cameras, then the patrol count; overflow collapses to "+N more".
 // Pure, unit-tested in tests/m15.test.js.
 export function railRosterLines(world) {
   const player = world.player;
@@ -449,7 +342,7 @@ export function railRosterLines(world) {
     : ` ${Math.round(Math.hypot(g.x - player.x, g.y - player.y) / CONFIG.TILE)}t`);
   const alerted = world.guards
     .filter((g) => g.state !== 'patrol')
-    .map((g) => `U${g.name.replace('USHER ', '')} ${g.state.toUpperCase()}${tile(g)}`);
+    .map((g) => `${g.name} ${g.state.toUpperCase()}${tile(g)}`);
   const cams = (world.cameras || []).map((c) => {
     const n = c.name.replace('CAM ', 'C');
     return `${n} ${c.state === 'spotted' ? 'SPOTTED' : 'SWEEP'}`;
@@ -462,18 +355,11 @@ export function railRosterLines(world) {
   return [...lines.slice(0, max - 1), `+${lines.length - (max - 1)} more`];
 }
 
-// M15: the rail VISIBILITY word — the binary light rule, as a word
-// (game-ui-ux: colour never the only signal). Reads the SAME lightAt
-// the simulation uses, so the word can never disagree with the
-// suspicion fill: standing in a pool is IN THE LIGHT (danger).
 export function visibilityWord(world) {
   return lightAt(world.player.x, world.player.y, world.level) === CONFIG.LIGHT_POOL
     ? 'IN THE LIGHT' : 'IN THE DARK';
 }
 
-// M15: the rail NOISE word — short form of the old SOUND line. The
-// radius is the audibility the simulation uses (0 = walking, 40 =
-// running on carpet, 140 = running on wood); the floor word comes
 // from the same floorAt the footstep sound uses.
 export function noiseWord(world) {
   const n = world.lastNoise;
@@ -482,9 +368,6 @@ export function noiseWord(world) {
     ? 'quiet on carpet' : 'loud on wood';
 }
 
-// M15: the rail icon legend — the LEGEND constant's four rules plus
-// every map object, as small canvas-drawn icons + one-word labels
-// (game-ui-ux: icon + label, never colour alone). 9 items in 3
 // columns x 3 rows. Pure data; drawHud draws the icons.
 export function legendItems() {
   return [
@@ -500,8 +383,6 @@ export function legendItems() {
   ];
 }
 
-// M15: the stage pill fill — the stage word (CALM/UNEASY/HUNTED/
-// ALARM) in the stage colour, dark text on a filled pill, dim text
 // on the quiet CALM pill.
 const stagePill = {
   CALM: { fill: '#3a2f24', border: '#5a6b7a', text: '#b8ab98' },
@@ -510,10 +391,6 @@ const stagePill = {
   ALARM: { fill: '#ff3b30', border: '#ff3b30', text: '#ffffff' },
 };
 
-// M15: one legend icon — a 10px canvas shape, the same shape the map
-// uses for that object (usher dot + cone, curtain slab, light pool,
-// carpet slab, coin diamond, smoke puff, camera wedge, laser line,
-// exit door). x,y is the icon's top-left corner; the label sits at
 // x+14 on the same baseline.
 function drawLegendIcon(ctx, icon, x, y) {
   ctx.save();
@@ -551,21 +428,10 @@ function drawLegendIcon(ctx, icon, x, y) {
   ctx.restore();
 }
 
-// M15: the right rail (game-ui-ux: sidebar HUD, the top-3 pattern).
-// Every HUD element lives in the rail; the playfield is 100% game.
-// Drawn on EVERY screen (play/paused/select/win/lose) — the rail is
-// the frame, not a play overlay: on select it shows the campaign
-// best instead of the live score, and the goal line drops the GHOST
-// word (nothing has been spotted yet on a title screen). `t` is real
-// time (seconds) and drives the pulse: above 0.7 suspicion the
-// suspicion bar throbs so a near-miss reads even at contact-sheet
-// size. `muted` shows MUTE next to the score. `campaign` is the
 // M14 campaign object (default = a fresh session).
 export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
-  const camp = campaign || { selected: 0, cleared: [false, false], best: [null, null] };
+  const camp = campaign || { selected: 0, cleared: [false, false, false], best: [null, null, null] };
   const L = railLayout();
-  // M12: the meter shows the worst suspicion of guards AND cameras —
-  // a camera filling up is as alarming as a guard filling up.
   // M13: the laser meter feeds the same bar + stage word.
   const worst = worstSuspicion(
     world.guards.concat(world.cameras || []),
@@ -582,7 +448,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
   ctx.fillStyle = '#4a3a28';
   ctx.fillRect(L.rail.x, L.rail.y, 1, L.rail.h);
 
-  // Title / job / score — centred, one straight centre column.
   ctx.textAlign = 'center';
   ctx.font = 'bold 15px monospace';
   ctx.fillStyle = COLORS.hud;
@@ -603,7 +468,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
   ctx.fillStyle = 'rgba(245, 240, 230, 0.20)';
   ctx.fillRect(L.innerX, L.dividerY, L.rail.w - 24, 1);
 
-  // OBJECTIVE — two lines, left-aligned on the fixed margin.
   ctx.font = 'bold 11px monospace';
   ctx.fillStyle = COLORS.hud;
   ctx.fillText('OBJECTIVE', L.objectiveHeader.x, L.objectiveHeader.y);
@@ -612,8 +476,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
   ctx.fillText('Steal back 3 props', L.objectiveLines[0].x, L.objectiveLines[0].y);
   ctx.fillText('Reach the EXIT', L.objectiveLines[1].x, L.objectiveLines[1].y);
 
-  // Stage pill + suspicion bar, one row: the pill is the stage word
-  // (CALM/UNEASY/HUNTED/ALARM) in the stage colour, the bar is the
   // same worst-suspicion value in 5 segments.
   const pill = stagePill[stage];
   pillPath(ctx, L.pill.x, L.pill.y, L.pill.w, L.pill.h, 9);
@@ -634,10 +496,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
     worstValue > 0 ? COLORS.meterHigh : COLORS.meterLow);
   ctx.globalAlpha = 1;
 
-  // VISIBILITY + NOISE — label left, word right, one row each (the
-  // word IS the meter for visibility: binary light, binary word).
-  // The noise bar below the word scales from the same lastNoise
-  // radius the text reports (0 = silent, 40 = carpet, 140 = wood).
   ctx.font = 'bold 11px monospace';
   ctx.fillStyle = COLORS.hud;
   ctx.fillText('VISIBILITY', L.visibility.label.x, L.visibility.label.y);
@@ -654,7 +512,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
   drawSegmentedBar(ctx, L.noiseBar.x, L.noiseBar.y, 16, L.noiseBar.h, 2,
     segmentCount(noiseRadius / CONFIG.NOISE_RUN_WOOD, 5), 5, COLORS.meterLow);
 
-  // LOOT — the objective checklist, one line per prop (✓ taken).
   ctx.font = 'bold 11px monospace';
   ctx.fillStyle = COLORS.hud;
   ctx.fillText(`LOOT · Props ${summary.taken}/${summary.total}`, L.lootHeader.x, L.lootHeader.y);
@@ -664,17 +521,15 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
     ctx.fillText(`${item.taken ? '✓' : '○'} ${item.name}`, L.propLines[i].x, L.propLines[i].y);
   });
 
-  // USHERS — one line per guard (Moonlit-rail pattern), capped at 5.
   ctx.font = 'bold 11px monospace';
   ctx.fillStyle = COLORS.hud;
-  ctx.fillText('USHERS', L.ushersHeader.x, L.ushersHeader.y);
+  ctx.fillText('GUARDS', L.ushersHeader.x, L.ushersHeader.y);
   ctx.font = '12px monospace';
   railRosterLines(world).forEach((line, i) => {
     ctx.fillStyle = /PATROL/.test(line) ? COLORS.hudDim : COLORS.hud;
     ctx.fillText(line, L.innerX, L.rosterLineY(i));
   });
 
-  // GOAL — the exit state + the ghost word (select drops it: nothing
   // has been spotted yet on a title screen).
   ctx.font = 'bold 12px monospace';
   ctx.fillStyle = world.detections === 0 ? '#a5d6a7' : '#ff8c42';
@@ -683,7 +538,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
     : `EXIT: OPEN · ${world.detections === 0 ? 'GHOST' : `SPOTTED ×${world.detections}`}`;
   ctx.fillText(goalText, L.goal.x, L.goal.y);
 
-  // LEGEND — small canvas-drawn icons + one-word labels, 3x3
   // (game-ui-ux: icon + label, never colour alone).
   ctx.font = 'bold 11px monospace';
   ctx.fillStyle = COLORS.hud;
@@ -699,7 +553,6 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
     ctx.fillText(item.label, ix + 14, iy);
   });
 
-  // CONTROLS — two short lines (the full controls live on the select
   // screen's HOW TO PLAY panel).
   ctx.font = '10px monospace';
   ctx.fillStyle = COLORS.hudDim;
@@ -710,17 +563,8 @@ export function drawHud(ctx, world, screen, t, muted = false, campaign = null) {
   drawMinimap(ctx, world);
 }
 
-// ---------------------------------------------------------------------------
-// M14 — campaign-lite (2 jobs) + the two user text rules of 22 Nov 06:22 /
-// 06:25 WIB. Pure data + pure helpers; render.js draws them, tests prove
-// them. No mechanic changes: win/lose rules and the per-job score
-// formula (prop x300 + GHOST +500 + time bonus) are exactly M13's.
-// ---------------------------------------------------------------------------
 
-// --- campaign state (in-memory per session, main.js owns the object) ---
 
-// Job status for the select cards: Job 1 is always open; a later job
-// opens only when the previous one is cleared (sequential unlock).
 export function jobStatus(campaign, i) {
   if (campaign.cleared[i]) return 'cleared';
   if (i === 0 || campaign.cleared[i - 1]) return 'open';
@@ -731,31 +575,44 @@ export function canSelectJob(campaign, i) {
   return jobStatus(campaign, i) !== 'locked';
 }
 
-// Campaign total = the sum of the per-job BEST scores (a null best
 // counts 0). The win screen shows this, not the run total.
 export function campaignTotal(best) {
   return best.reduce((sum, b) => sum + (b ? b.score : 0), 0);
 }
 
-// A job's best only ever improves: a worse replay never lowers it.
-// The stored time rides with the best score (a tie keeps the earlier,
-// faster run — the caller passes the run time only on improvement).
-export function updateBest(best, score, time) {
-  if (!best || score > best.score) return { score, time };
-  return best;
+export function updateBest(best, score, time, stars = 0) {
+  if (!best) return { score, time, stars };
+  // The best score and the best stars are independent: a faster run
+  // with fewer stars never lowers the stars, and a slower run with
+  // more stars never lowers the score.
+  return {
+    score: Math.max(best.score, score),
+    time: score > best.score ? time : best.time,
+    stars: Math.max(best.stars || 0, stars),
+  };
+}
+
+// M16 stars (display only — never change the score): 3 = GHOST + all
+// props + within par; 2 = GHOST; 1 = cleared. Par comes from
+// CONFIG.PAR_S (per job); the caller passes the job's par.
+export function starsForJob(detections, taken, total, time, par) {
+  if (detections === 0 && taken === total && time <= par) return 3;
+  if (detections === 0) return 2;
+  return 1;
+}
+
+export function starsText(n) {
+  return '★'.repeat(n) + '☆'.repeat(3 - n);
 }
 
 // --- select screen (pure layout + content) ---
 
-// The select screen layout, as pure data — the single source of truth
-// for render.js AND the tests. One grid (x90..870): title + tagline
-// centred, two job cards, the HOW TO PLAY panel, the centred closer
-// + campaign best. Every text baseline sits >=10px from its panel
 // edge (the HUD-fix rule, applied to the new screen too).
 export function selectLayout() {
   const cards = [
-    { x: 90, y: 108, w: 380, h: 128 },
-    { x: 490, y: 108, w: 380, h: 128 },
+    { x: 20, y: 108, w: 300, h: 128 },
+    { x: 330, y: 108, w: 300, h: 128 },
+    { x: 640, y: 108, w: 300, h: 128 },
   ];
   const howto = { x: 90, y: 250, w: 780, h: 272 };
   return {
@@ -771,18 +628,18 @@ export function selectLayout() {
   };
 }
 
-// The four lines inside one job card: number + name, the sensor/prop
-// counts, the status, and the best (or the key hint). Left-aligned in
-// the card on a fixed margin — the same straight-edge rule as the
 // HOW TO PLAY panel (user 06:25 WIB).
 export function selectCardLines(level, campaign, index) {
-  const counts = `${level.guards.length} guards · ${level.cameras.length} cameras · ${level.lasers.length} lasers · ${level.props.length} props`;
+  // The counts line drops '· N props' (every job has 3, and HOW TO
+  // PLAY says so) and shortens 'cameras' to 'cams' — the full format
+  // is 42 chars and overflows a 300px card at 12px (panel − 80px rule).
+  const counts = `${level.guards.length} guards · ${level.cameras.length} cams · ${level.lasers.length} lasers`;
   const status = jobStatus(campaign, index);
   const best = campaign.best[index];
   const statusLine = status === 'cleared' ? 'CLEARED'
-    : status === 'locked' ? 'LOCKED — clear Job 1 to open' : 'NOT CLEARED';
+    : status === 'locked' ? `LOCKED — clear Job ${index} to open` : 'NOT CLEARED';
   const bestLine = status === 'cleared' && best
-    ? `BEST ${best.score} · ${formatTime(best.time)}`
+    ? `BEST ${best.score} · ${formatTime(best.time)} · ${starsText(best.stars || 0)}`
     : status === 'locked' ? '' : `PRESS ${index + 1}`;
   return [
     `${index + 1} · ${level.name}`,
@@ -792,13 +649,6 @@ export function selectCardLines(level, campaign, index) {
   ];
 }
 
-// The HOW TO PLAY body, as pure data — 13 rows: section header,
-// objective (4 short lines), blank, legend + one gadget/threat per
-// line (5), blank, controls (1). The prop sentence is the user's
-// rewrite (rule 06:25 (c)): a complete sentence ending at "EXIT.",
-// then a new line starting "Props are optional:" — never a lowercase
-// continuation. The names are generic ("the 3 props") because this
-// screen covers BOTH jobs, whose props differ; the per-job names
 // appear on the map labels and the job cards' counts.
 export function selectHowtoLines() {
   return [
@@ -818,7 +668,6 @@ export function selectHowtoLines() {
   ];
 }
 
-// Click hit-test for the select cards: the card index, or -1.
 export function jobAtPoint(x, y, layout = selectLayout()) {
   for (let i = 0; i < layout.cards.length; i++) {
     const c = layout.cards[i];
@@ -829,24 +678,14 @@ export function jobAtPoint(x, y, layout = selectLayout()) {
 
 // --- panel text rules (user 06:25 WIB) ---
 
-// The title stays centred; the BODY is left-aligned on ONE fixed left
-// margin (panel.x + 40), so the block has one straight left edge. No
-// body line may be wider than the panel minus 80px (40px clear on
-// each side) — measured with measureText, enforced by tests, not by
-// eye. The closer ("Press ENTER..." / "NEXT JOB...") stays centred.
 export const PANEL_TEXT_MARGIN = 40;
 
-// `measure` is (text, fontSizePx) => width in px (the tests use the
-// 0.6em monospace advance; the real canvas uses ctx.measureText).
 export function panelTextFits(text, fontSize, panelW, measure) {
   return measure(text, fontSize) <= panelW - PANEL_TEXT_MARGIN * 2;
 }
 
 // --- win / lose screen text (pure data) ---
 
-// The win screen: title centred, body left-aligned on panel.x + 40,
-// closer centred. Job 1 offers NEXT JOB (ENTER); Job 2 closes the
-// campaign with the total. The total is the sum of the per-job BESTS
 // (campaignTotal), so a worse replay never lowers it.
 export function winScreenLines(world, campaign) {
   const taken = world.props.filter((p) => p.taken).length;
@@ -854,20 +693,22 @@ export function winScreenLines(world, campaign) {
   const rank = winRank(world.detections);
   const job = world.jobIndex || 0;
   const total = campaignTotal(campaign.best);
+  const last = campaign.best.length - 1; // only the last job closes the campaign
+  const par = CONFIG.PAR_S[job];
+  const stars = starsForJob(world.detections, taken, world.props.length, world.time, par);
   const body = [
     `JOB ${job + 1} · ${world.jobName || 'THE MIDNIGHT THEATRE'} — CLEARED`,
     `Time: ${formatTime(world.time)} · Props ${taken}/${world.props.length} · Spotted ${world.detections}x`,
     `Score: ${s.total} — Props ${s.props} + Ghost ${s.ghost} + Time ${s.time}`,
-    job === 0 ? `CAMPAIGN TOTAL ${total}` : `CAMPAIGN COMPLETE — TOTAL ${total}`,
+    `STARS ${starsText(stars)} · PAR ${formatTime(par)}`,
+    job < last ? `CAMPAIGN TOTAL ${total}` : `CAMPAIGN COMPLETE — TOTAL ${total}`,
   ];
-  const footer = job === 0
+  const footer = job < last
     ? 'NEXT JOB — PRESS ENTER · R TO REPLAY'
     : 'PRESS ENTER — BACK TO TITLE · R TO REPLAY';
   return { title: `${rank} — ESCAPED!`, body, footer };
 }
 
-// The lose screen: the M13 body lines, unchanged in meaning, now
-// left-aligned with a centred closer (same rule as the win screen).
 export function loseScreenLines(world) {
   const s = scoreBreakdown(world);
   const body = [
@@ -880,9 +721,6 @@ export function loseScreenLines(world) {
 
 // --- overlay panel rect (single source of truth) ---
 
-// The overlay panel rect — drawOverlay and the label-box check share
-// this, so a label can never be judged against a different rect than
-// the one actually drawn. (x150 y190 w660; height grows with the row
 // count, same as M11.)
 export function overlayPanelRect(rows) {
   return { x: CONFIG.VIEW_WIDTH / 2 - 330, y: 190, w: 660, h: 130 + rows * 28 };
@@ -890,17 +728,6 @@ export function overlayPanelRect(rows) {
 
 // --- label-box occlusion (user 06:22 WIB) ---
 
-// A world label is skipped when its TEXT BOX (measureText) touches ANY
-// panel — HUD panels, the minimap, or an overlay panel — NOT only when
-// its anchor point falls inside one. The anchor-only check (labelInsideHud,
-// kept for its tests) missed exactly the three defects the user found
-// on the start screen: USHER 1's label was cut in half under the overlay
-// because its anchor sat outside the panel while its text jutted under
-// the panel's left edge; USHER 4 sat on the panel's top border line;
-// and a laser beam crossed CAM 2's text. Laser beams count as occluders
-// too, as thickened line rects — the same box test, one occluder list.
-// `metrics` is ctx.measureText(text): { width, actualBoundingBoxAscent,
-// actualBoundingBoxDescent } (render.js falls back to the font size
 // when a canvas does not report the boxes).
 export function textBox(text, x, y, metrics, align = 'center') {
   const left = align === 'center' ? x - metrics.width / 2
@@ -913,7 +740,6 @@ export function textBox(text, x, y, metrics, align = 'center') {
   };
 }
 
-// Rect overlap with a small margin: a label that merely TOUCHES a panel
 // edge (2px) already reads as clipped, so it is skipped.
 export function rectsOverlap(a, b, margin = 2) {
   return a.x - margin < b.x + b.w && a.x + a.w + margin > b.x
@@ -924,8 +750,6 @@ export function labelOccluded(box, occluders, margin = 2) {
   return occluders.some((r) => rectsOverlap(box, r, margin));
 }
 
-// A laser beam as an occluder rect: the segment thickened by `pad` px
-// (the beam itself is 3px + a 7px glow, so 4px covers the visible line).
 export function laserOccluder(laser, pad = 4) {
   const x = Math.min(laser.x1, laser.x2) - pad;
   const y = Math.min(laser.y1, laser.y2) - pad;
@@ -934,11 +758,6 @@ export function laserOccluder(laser, pad = 4) {
   return { x, y, w: Math.max(w, pad * 2), h: Math.max(h, pad * 2) };
 }
 
-// The occluder list for world labels on a given screen. The world is
-// drawn first and the panels on top, so render.js builds this BEFORE
-// drawing the world. `hud` adds the HUD panels + minimap (play/paused
-// only — the HUD is not drawn on the other screens); `overlay` is the
-// screen's overlay panel rect (select/win/lose); every screen adds the
 // laser beams.
 export function labelOccluders({ hud = false, overlay = null, lasers = [] } = {}) {
   const out = [];
